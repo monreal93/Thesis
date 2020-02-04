@@ -1,11 +1,12 @@
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/shepp_logan3d'))
+addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/Coilsensitivity'))
 
 %% Tasks
-%   - How to properly define del_ky and del_kz, line 68-71
-%   - How to 
-% 
-% 
-% 
+%   - How to properly define them, without using res variables, line 69-74
+%   - All loops should be using the Kspace FOV, no Img, fix it
+%   - Check exactly how to define p_bw depeding on the size of image
+%   - 
+%   -
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%  For NIFTI
@@ -24,11 +25,14 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/s
 % Ry = 4; Rz = 2;
 % k_fov = 1./p_s;
 % gamma = 42.58e6;                                                                % Gyromagnetic ratio
-% caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
+% caipi = 1;
+% % 1 to dephase pair lines as in 2D CAIPIA
+% plt = 0;                                                                                   % 1 to plot all trajectories
 
 %% For Phantom
 %%% User input:
-i_t = phantom3d(240);
+N = 60;
+i_t = phantom3d(N);
 i_f = fftshift(fftn(i_t));                                                                  
 i_fov = [size(i_t,1) size(i_t,2) size(i_t,3)];                                % Vector with fov, [x y z]
 p_s = [1e-3 1e-3 1e-3];                                                         % Vector with pixel size [x y z]
@@ -36,12 +40,13 @@ voxel_size = p_s(1)*p_s(2)*p_s(3)*.001;                                % voxel s
 x_points = i_fov(1)*6;                                                             % number 6 if for oversampling, change if needed
 gy_gz_amplit = 6e-3;                                                              % Max amplitude of sin readout gradients
 sins = 7;                                                                                % # of sins per readout line      
-p_bw = 70;                                                                             % pixel BW
+p_bw = 70*4;                                                                             % pixel BW
 Ry = 3; Rz = 3;                                                                       % Undersampling factor      
 k_fov = 1./p_s;                                                                        % K-space FOV
 gamma = 42.58e6;                                                                % Gyromagnetic ratio
 caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
-plt = 0;                                                                                   % 1 to plot all trajectories
+plt = 1;                                                                                   % 1 to plot all trajectories
+nCh=32;                                                                                 % number of coils
 
 %% Calculating parameters for Gradients
 t_r = 1/p_bw;
@@ -65,19 +70,29 @@ z =  interp1(t_prime,z_calc,t)+range_z;
 figure; plot3(x,y,z)
 % %%%%
 
-del_ky = k_fov(2)/(i_fov(2)/Ry);
-del_kz = k_fov(3)/(i_fov(3)/Rz);
+% app 1
+res_ky = ((max(y)-min(y))-(i_fov(2)/Ry))/(i_fov(2)/Ry);
+res_kz = ((max(z)-min(z))-(i_fov(3)/Rz))/(i_fov(3)/Rz);
+del_ky = (k_fov(2)/((i_fov(2)/Ry)-(max(y)-min(y))))  + res_ky;
+del_kz = (k_fov(3)/((i_fov(3)/Rz)-(max(z)-min(z)))) + res_kz;
+del_ky = (del_ky*-1);
+del_kz = (del_kz*-1);
+% % app 2
 % del_ky = (k_fov(2)/(i_fov(2)/Ry))+(max(y)-min(y));
 % del_kz = (k_fov(3)/(i_fov(3)/Rz))+(max(z)-min(z));
+% % app 3
+% del_ky = (max(y)-min(y));
+% del_kz = (max(z)-min(z));
+
 original_y = y; 
 
 %%% Creating null matrices for K points
-kx = zeros(round(k_fov(2)/del_ky),round(k_fov(3)/del_kz),x_points);
+kx = zeros(i_fov(2)/Ry,i_fov(3)/Rz,x_points);
 ky =kx; kz = kx;
 
 %%  Generating K-space trajectories
-for j=1:(k_fov(3)/del_kz)
-    for i=1:(k_fov(2)/del_ky)
+for j=1:(i_fov(3)/Rz)
+    for i=1:(i_fov(2)/Ry)
             kx(i,j,:) = x;
             ky(i,j,:) = y;
             kz(i,j,:) = z;
@@ -98,11 +113,11 @@ end
 
 %%  Ploting all the trajerctories
 if plt == 1
-    for j = 1:k_fov/del_ky    
+    for j = 1:i_fov(2)/Ry    
         xx = squeeze(kx(j,:,:));
         yy = squeeze(ky(j,:,:));
         zz = squeeze(kz(j,:,:));
-        for i=1:k_fov/del_kz
+        for i=1:i_fov(3)/Rz
             plot3(xx(i,:),yy(i,:),zz(i,:));
             hold on
         end
@@ -134,3 +149,18 @@ end
 % as(Interpolated_kspace)
 % as(u_img)
 %}
+
+%% Generate coil sensitivity
+z_offset = [-0.025 0.025];
+coil_radius = 0.14;
+loop_radius = 0.05;
+Resolution = 3e-3;
+[CoilSensitivity1] = GenerateCoilSensitivity4Sim(size(i_t),[Resolution Resolution Resolution],coil_radius,loop_radius,z_offset(1),nCh./2);
+[CoilSensitivity2] = GenerateCoilSensitivity4Sim(size(i_t),[Resolution Resolution Resolution],coil_radius,loop_radius,z_offset(2),nCh./2);
+CoilSensitivity = cat(4,CoilSensitivity1,CoilSensitivity2);
+mask = ones(size(i_t));
+mask(i_t == 0) = 0;
+mask = repmat(mask,1,1,1,nCh);
+CoilSensitivity = CoilSensitivity.*mask;
+CoilSensitivity = CoilSensitivity./1;%max(CoilSensitivity(:));
+
