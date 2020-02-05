@@ -1,11 +1,20 @@
+addpath(genpath('/home/amonreal/gpuNUFFT-master/gpuNUFFT'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/shepp_logan3d'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/Coilsensitivity'))
+addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/gpuNUFFT'))
+addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/general'))
+addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/Fessler_nufft'))
+addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/gpuNUFFT/gpuNUFFT-master/matlab/demo/utils'));
+
 
 %% Tasks
-%   - How to properly define them, without using res variables, line 69-74
-%   - All loops should be using the Kspace FOV, no Img, fix it
-%   - Check exactly how to define p_bw depeding on the size of image
+%   - Adjust ky and kz, to make sure helix get only to 500 in both direct
+%   - Check all values of Coil Sensitivity section, Resolution specially
+%   - Check modif needed in NUFFT part , for non-iso img
+%   - Check all paths that are needed, clean up the ones not needed
+%   - Generate PSFs
 %   - 
+%   -
 %   -
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -40,11 +49,11 @@ voxel_size = p_s(1)*p_s(2)*p_s(3)*.001;                                % voxel s
 x_points = i_fov(1)*6;                                                             % number 6 if for oversampling, change if needed
 gy_gz_amplit = 6e-3;                                                              % Max amplitude of sin readout gradients
 sins = 7;                                                                                % # of sins per readout line      
-p_bw = 70*4;                                                                             % pixel BW
+p_bw = 70*4;                                                                         % pixel BW, 70 from paper, *4 to compensate img size
 Ry = 3; Rz = 3;                                                                       % Undersampling factor      
 k_fov = 1./p_s;                                                                        % K-space FOV
 gamma = 42.58e6;                                                                % Gyromagnetic ratio
-caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
+caipi = true;                                                                           % 1 to dephase pair lines as in 2D CAIPI
 plt = 1;                                                                                   % 1 to plot all trajectories
 nCh=32;                                                                                 % number of coils
 
@@ -70,19 +79,9 @@ z =  interp1(t_prime,z_calc,t)+range_z;
 figure; plot3(x,y,z)
 % %%%%
 
-% app 1
-res_ky = ((max(y)-min(y))-(i_fov(2)/Ry))/(i_fov(2)/Ry);
-res_kz = ((max(z)-min(z))-(i_fov(3)/Rz))/(i_fov(3)/Rz);
-del_ky = (k_fov(2)/((i_fov(2)/Ry)-(max(y)-min(y))))  + res_ky;
-del_kz = (k_fov(3)/((i_fov(3)/Rz)-(max(z)-min(z)))) + res_kz;
-del_ky = (del_ky*-1);
-del_kz = (del_kz*-1);
-% % app 2
-% del_ky = (k_fov(2)/(i_fov(2)/Ry))+(max(y)-min(y));
-% del_kz = (k_fov(3)/(i_fov(3)/Rz))+(max(z)-min(z));
-% % app 3
-% del_ky = (max(y)-min(y));
-% del_kz = (max(z)-min(z));
+% Defining spacing between helix in y and z directions
+del_ky = (k_fov(2)-((max(y)-min(y))*(i_fov(2)/Ry)))/(i_fov(2)/Ry)+(max(y)-min(y));
+del_kz = (k_fov(3)-((max(z)-min(z))*(i_fov(3)/Rz)))/(i_fov(3)/Rz)+(max(z)-min(z));
 
 original_y = y; 
 
@@ -104,7 +103,7 @@ for j=1:(i_fov(3)/Rz)
     end
           z = z-(del_kz);
           y = original_y;
-      if caipi == 1
+      if caipi
          if (rem(j,2) ==1)
                 y = y - (del_ky/2);
          end
@@ -163,4 +162,38 @@ mask(i_t == 0) = 0;
 mask = repmat(mask,1,1,1,nCh);
 CoilSensitivity = CoilSensitivity.*mask;
 CoilSensitivity = CoilSensitivity./1;%max(CoilSensitivity(:));
+
+%% Generating NUFFT
+% Normalize trajectories
+tr = zeros(3,length(kx(:)));
+tr(1,:) = kx(:)./k_fov(1);
+tr(2,:) = ky(:)./k_fov(2);
+tr(3,:) = kz(:)./k_fov(3);
+
+disp('Generate NUFFT Operator without coil sensitivities');
+disp_slice=N/2;
+useGPU = true;
+useMultiCoil = 0;
+osf = 2; wg = 3; sw = 8;
+imwidth = N;
+w = 1; % no density compensation for now
+FT = gpuNUFFT(tr,col(ones(size(kx(:)))),osf,wg,sw,[N,N,N],[],true);
+kspace_nufft = FT*i_t;
+
+figure; view(2)
+scatter3(kx(:),ky(:),kz(:),ones(size(kz(:))).*50,abs(kspace_nufft),'.')
+xlabel('Kx');ylabel('Ky');zlabel('Kz');view(3)
+
+kspace_nufft = reshape(kspace_nufft,20,20,360);
+
+% % kspace_reshape = reshape(undersampledKspace,size(undersampledKspace,1)*size(undersampledKspace,2)*size(undersampledKspace,3),size(undersampledKspace,4));
+% kspace_nufft = zeros([length(kx(:)) nCh]);
+% for ii=1:nCh
+% %     temp_k = undersampledKspace(:,:,:,iter_ch);
+%     kspace_nufft(:,ii) = FT*(i_t.*CoilSensitivity(:,:,:,ii));
+%     img_sens(:,:,:,ii) = FT'*(kspace_nufft(:,ii) .* sqrt(col(1)));
+% end
+% as({img_sens(:,:,round(N./2),:) CoilSensitivity(:,:,round(N./2),:)})
+% img_comb = sqrt(sum(abs(img_sens).^2,4));
+
 
