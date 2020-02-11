@@ -1,4 +1,16 @@
+%% Tasks
+%   - Adjust ky and kz, to make sure helix get only to 500 in both direct
+%   - Check all values of Coil Sensitivity section, Resolution specially
+%   - Check modif needed in NUFFT part , for non-iso img
+%   - Fix that the sin and cos start when the readout is performed, -500Ks
+%   - 
+%   - 
+%   - 
+%   -
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 %% Add paths
+close all; clear all; clc
 addpath(genpath('/home/amonreal/gpuNUFFT-master/gpuNUFFT'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/shepp_logan3d'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/Coilsensitivity'))
@@ -6,17 +18,6 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/g
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/general'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/Fessler_nufft'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/gpuNUFFT/gpuNUFFT-master/matlab/demo/utils'));
-
-%% Tasks
-%   - Adjust ky and kz, to make sure helix get only to 500 in both direct
-%   - Check all values of Coil Sensitivity section, Resolution specially
-%   - Check modif needed in NUFFT part , for non-iso img
-%   - Fix that the sin and cos start when the readout is performed, -500Ks
-%   - Check in PSFs NaN values
-%   - 
-%   - 
-%   -
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%  For NIFTI
 % %%% User input:
@@ -55,7 +56,7 @@ Ry = 3; Rz = 3;                                                                 
 k_fov = 1./p_s;                                                                        % K-space FOV
 gamma = 42.58e6;                                                                % Gyromagnetic ratio
 caipi = true;                                                                           % 1 to dephase pair lines as in 2D CAIPI
-plt = 1;                                                                                   % 1 to plot all trajectories
+plt = 0;                                                                                   % 1 to plot all trajectories
 nCh=32;                                                                                 % number of coils
 
 %% Calculating parameters for Gradients
@@ -73,9 +74,9 @@ z_calc = gamma/2*pi*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
 
 range_y = (k_fov(1)/2)-max(y_calc);
 range_z = (k_fov(1)/2)-max(z_calc);
-x = interp1(t_prime,x_calc,t);
-y = interp1(t_prime,y_calc,t)+range_y;
-z =  interp1(t_prime,z_calc,t)+range_z;
+x = interp1(t_prime,x_calc,t,'linear','extrap');
+y = interp1(t_prime,y_calc,t,'linear','extrap')+range_y;
+z =  interp1(t_prime,z_calc,t,'linear','extrap')+range_z;
 
 % Defining spacing between helix in y and z directions
 del_ky = (k_fov(2)-((max(y)-min(y))*(i_fov(2)/Ry)))/(i_fov(2)/Ry)+(max(y)-min(y));
@@ -112,7 +113,7 @@ for ii = 1:nCh
     i_f(:,:,:,ii) = fftshift(fftn(i_t(:,:,:,ii))); 
 end
 
-%%  Generating K-space trajectories
+%%  Generating K-space Corkscrew trajectories
 for j=1:(i_fov(3)/Rz)
     for l=1:(i_fov(2)/Ry)
             kx(:,l,j) = x;
@@ -133,8 +134,7 @@ for j=1:(i_fov(3)/Rz)
       end
 end
 
-
-%%  Ploting all the trajerctories
+%  Ploting all the trajerctories
 if plt == 1
     for j = 1:i_fov(2)/Ry    
         xx = squeeze(kx(:,j,:));
@@ -198,8 +198,15 @@ end
 % kspace_nufft = reshape(kspace_nufft,N/Ry,N/Rz,N*ov);
 kspace_nufft = reshape(kspace_nufft,N*ov,N/Ry,N/Rz,nCh);
 
-%% Generating PSF
-% Creating cartersian trajectory
+%% Img WAVE-CAPI
+i_wc = zeros(size(kspace_nufft));
+for ii = 1:nCh
+    i_wc(:,:,:,ii) = fftshift(ifft(kspace_nufft(:,:,:,ii))); 
+end
+
+as(i_wc)
+
+%% Creating cartersian trajectory
 del_c = 1./(i_fov.*p_s);
 x_c = zeros(x_points,size(i_t,2),size(i_t,3));
 y_c = x_c;  z_c = x_c;
@@ -220,7 +227,7 @@ for j=1:i_fov(2)
           yc = original_yc;
 end
 
-%%  Ploting all the trajerctories
+% Ploting all the trajerctories
 if plt == 1
 figure;
     for j = 1:i_fov(2)   
@@ -239,9 +246,9 @@ end
 psf_y = zeros(x_points,size(ky,2)*Ry);
 psf_z = zeros(x_points,size(kz,3)*Rz);
 
-Px = interp1(t_prime,x_calc,t);
-Py = interp1(t_prime,y_calc,t);
-Pz =  interp1(t_prime,z_calc,t);
+Px = interp1(t_prime,x_calc,t,'linear','extrap');
+Py = interp1(t_prime,y_calc,t,'linear','extrap');
+Pz =  interp1(t_prime,z_calc,t,'linear','extrap');
 if plt==1
     figure; plot(Px,Py)
     hold on
@@ -261,14 +268,22 @@ end
     end
 
 psf_yz = repmat(psf_y,[1,1,size(psf_z,2)]) .* repmat(permute(psf_z, [1,3,2]), [1,size(psf_y,2),1]);
-
-figure; imagesc(angle(psf_y).');colormap jet, axis image off ; title('PSF Y')
-figure; imagesc(angle(psf_z).');colormap jet, axis image off; title('PSF Z')
-
-%% Img WAVE-CAPI
-i_wc = zeros(size(kspace_nufft));
-for ii = 1:nCh
-    i_wc(:,:,:,ii) = fftshift(ifft(kspace_nufft(:,:,:,ii))); 
+if plt == 1
+    figure; imagesc(angle(psf_y).');colormap jet, axis image off ; title('PSF Y')
+    figure; imagesc(angle(psf_z).');colormap jet, axis image off; title('PSF Z')
 end
 
-as(i_wc)
+%% Saving WAVE-CAPI, PSF and Sensitivity map and parameters
+param = [];
+param.psf_len = size(i_wc, 1);                              % psf length
+param.img_len = size(i_wc,1)/ov;                             % image length (without oversampling)
+param.pad_size = (param.psf_len - param.img_len) / 2;          % zero pad size (psf length - image length) / 2
+param.num_chan = size(i_wc,4);
+param.Ry = Ry;
+param.Rz = Rz;
+param.ov = ov;
+
+save('Data/param.mat','param')
+save('Data/sens_map.mat','CoilSensitivity')
+save('Data/img_wc.mat','i_wc')
+save('Data/psf_yz.mat','psf_yz')
