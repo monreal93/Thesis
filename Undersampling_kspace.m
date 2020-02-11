@@ -13,7 +13,7 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/g
 %   - Check modif needed in NUFFT part , for non-iso img
 %   - Fix that the sin and cos start when the readout is performed, -500Ks
 %   - Check in PSFs NaN values
-%   - Generate K-space for al 32 coils
+%   - 
 %   - 
 %   -
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -68,8 +68,8 @@ omg = 2*pi*f;
 
 x_calc_points = length(t_prime);
 x_calc = ((-k_fov(1)/2)+(k_fov(1)/x_calc_points)):(k_fov(1))/x_calc_points:(k_fov(1)/2);
-y_calc = gamma*cumsum(gy_gz_amplit*sin(omg*t_prime)*delta_t);
-z_calc = gamma*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
+y_calc = gamma/2*pi*cumsum(gy_gz_amplit*sin(omg*t_prime)*delta_t);
+z_calc = gamma/2*pi*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
 
 range_y = (k_fov(1)/2)-max(y_calc);
 range_z = (k_fov(1)/2)-max(z_calc);
@@ -84,7 +84,7 @@ del_kz = (k_fov(3)-((max(z)-min(z))*(i_fov(3)/Rz)))/(i_fov(3)/Rz)+(max(z)-min(z)
 original_y = y; 
 
 %%% Creating null matrices for K points
-kx = zeros(i_fov(2)/Ry,i_fov(3)/Rz,x_points);
+kx = zeros(x_points,i_fov(2)/Ry,i_fov(3)/Rz);
 ky =kx; kz = kx;
 
 %% Generate coil sensitivity
@@ -104,12 +104,20 @@ if plt == 1
     as(CoilSensitivity)
 end
 
+%% Generate K-space w/coil sensitivity for 32 channels
+i_t = repmat(i_t,1,1,1,32);
+i_t = i_t.*CoilSensitivity;
+
+for ii = 1:nCh
+    i_f(:,:,:,ii) = fftshift(fftn(i_t(:,:,:,ii))); 
+end
+
 %%  Generating K-space trajectories
 for j=1:(i_fov(3)/Rz)
     for l=1:(i_fov(2)/Ry)
-            kx(l,j,:) = x;
-            ky(l,j,:) = y;
-            kz(l,j,:) = z;
+            kx(:,l,j) = x;
+            ky(:,l,j) = y;
+            kz(:,l,j) = z;
             y = y -(del_ky);
 %         if (caipi == 1) &&(rem(j,2) ==0)&& (((k_fov/del_ky)-i)==1)
 %            y = y -del_ky;
@@ -124,23 +132,16 @@ for j=1:(i_fov(3)/Rz)
          end
       end
 end
-% % make kspace ugly way  but atleast clear what happens
-% kspace = zeros([size(CoilSensitivity)]);
-% undersampledKspace =  zeros([size(kX) nCh]);
-% for iter_ch = 1:nCh
-% kspace(:,:,:,iter_ch) = (1./sqrt(size(ImageSpace,1))).*fftshift(fft(ifftshift(ImageSpace.*CoilSensitivity(:,:,:,iter_ch),1),[],1),1);
-% kspace(:,:,:,iter_ch) = (1./sqrt(size(kspace,2))).*fftshift(fft(ifftshift(kspace(:,:,:,iter_ch),2),[],2),2);
-% kspace(:,:,:,iter_ch) = (1./sqrt(size(kspace,3))).*fftshift(fft(ifftshift(kspace(:,:,:,iter_ch),3),[],3),3);
-% end
+
 
 %%  Ploting all the trajerctories
 if plt == 1
     for j = 1:i_fov(2)/Ry    
-        xx = squeeze(kx(j,:,:));
-        yy = squeeze(ky(j,:,:));
-        zz = squeeze(kz(j,:,:));
+        xx = squeeze(kx(:,j,:));
+        yy = squeeze(ky(:,j,:));
+        zz = squeeze(kz(:,j,:));
         for l=1:i_fov(3)/Rz
-            plot3(xx(l,:),yy(l,:),zz(l,:));
+            plot3(xx(:,l),yy(:,l),zz(:,l));
             hold on
         end
     end
@@ -191,16 +192,16 @@ kspace_nufft = FT*i_t;
 
 if plt == 1
     figure; view(2)
-    scatter3(kx(:),ky(:),kz(:),ones(size(kz(:))).*50,abs(kspace_nufft),'.')
+    scatter3(kx(:),ky(:),kz(:),ones(size(kz(:))).*50,abs(kspace_nufft(:,1)),'.')
     xlabel('Kx');ylabel('Ky');zlabel('Kz');view(3)
 end
 % kspace_nufft = reshape(kspace_nufft,N/Ry,N/Rz,N*ov);
-kspace_nufft = reshape(kspace_nufft,N*ov,N/Ry,N/Rz);
+kspace_nufft = reshape(kspace_nufft,N*ov,N/Ry,N/Rz,nCh);
 
 %% Generating PSF
 % Creating cartersian trajectory
 del_c = 1./(i_fov.*p_s);
-x_c = zeros(size(i_t,1),size(i_t,2),x_points);
+x_c = zeros(x_points,size(i_t,2),size(i_t,3));
 y_c = x_c;  z_c = x_c;
 
 xc = (k_fov(1)/2*-1)+(del_c(1)/ov):del_c(1)/ov:k_fov(1)/2;
@@ -210,9 +211,9 @@ original_yc = yc;
 
 for j=1:i_fov(2)
     for l=1:i_fov(3)
-            x_c(l,j,:) = xc;
-            y_c(l,j,:) = yc;
-            z_c(l,j,:) = zc;
+            x_c(:,l,j) = xc;
+            y_c(:,l,j) = yc;
+            z_c(:,l,j) = zc;
             yc = yc +(p_s(2));
     end
           zc = zc+(p_s(3));
@@ -224,9 +225,9 @@ if plt == 1
 figure;
     for j = 1:i_fov(2)   
         for l=1:i_fov(3)
-            xx = x_c(l,j,:); xx = xx(:)';
-            yy = y_c(l,j,:); yy = yy(:)';
-            zz = z_c(l,j,:); zz = zz(:)';
+            xx = x_c(:,l,j); xx = xx(:)';
+            yy = y_c(:,l,j); yy = yy(:)';
+            zz = z_c(:,l,j); zz = zz(:)';
             plot3(xx,yy,zz);
             hold on
         end
@@ -235,8 +236,8 @@ figure;
 end
 
 %% Creating PSFs
-psf_y = zeros(size(ky,1)*Ry,x_points);
-psf_z = zeros(size(kz,1)*Rz,x_points);
+psf_y = zeros(x_points,size(ky,2)*Ry);
+psf_z = zeros(x_points,size(kz,3)*Rz);
 
 Px = interp1(t_prime,x_calc,t);
 Py = interp1(t_prime,y_calc,t);
@@ -249,24 +250,25 @@ end
 
 % psf Y
     for l=1:i_fov(2)
-        yy = y_c(l,1,:); yy = yy(:)';
-        psf_y(l,:) = exp(-1i*2*pi*Py.*yy);
+        yy = y_c(:,l,1); yy = yy(:)';
+        psf_y(:,l) = exp(-1i*2*pi*Py.*yy);
     end
-psf_y = psf_y';
     
 % psf Z
     for l=1:i_fov(3)
-        zz = z_c(1,l,:); zz = zz(:)';
-        psf_z(l,:) = exp(-1i*2*pi*Pz.*zz);
+        zz = z_c(:,1,l); zz = zz(:)';
+        psf_z(:,l) = exp(-1i*2*pi*Pz.*zz);
     end
-psf_z = psf_z';
 
 psf_yz = repmat(psf_y,[1,1,size(psf_z,2)]) .* repmat(permute(psf_z, [1,3,2]), [1,size(psf_y,2),1]);
 
 figure; imagesc(angle(psf_y).');colormap jet, axis image off ; title('PSF Y')
 figure; imagesc(angle(psf_z).');colormap jet, axis image off; title('PSF Z')
 
-%% 
- bb = ifftn(kspace_nufft);
- as(bb)
- 
+%% Img WAVE-CAPI
+i_wc = zeros(size(kspace_nufft));
+for ii = 1:nCh
+    i_wc(:,:,:,ii) = fftshift(ifft(kspace_nufft(:,:,:,ii))); 
+end
+
+as(i_wc)
