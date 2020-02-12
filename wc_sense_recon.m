@@ -14,6 +14,7 @@ load Data/img_wc.mat
 load Data/sens_map.mat
 load Data/psf_yz.mat
 load Data/param.mat
+load Data/phantom.mat
 
 %% SENSE recon for Wave-CAIPI
 size_x = size(i_wc, 1)/param.ov;
@@ -24,8 +25,8 @@ y_skip = size(i_wc, 2);
 i_wc = i_wc(:,:,7,:);           
 cs = zeros(60,60,3,32);
 cs(:,:,1,:) = CoilSensitivity(:,:,7,:);
-cs(:,:,2,:) = CoilSensitivity(:,:,20,:);
-cs(:,:,3,:) = CoilSensitivity(:,:,60,:);
+cs(:,:,2,:) = CoilSensitivity(:,:,27,:);
+cs(:,:,3,:) = CoilSensitivity(:,:,47,:);
 
 slice_ind = 7:20:60;      % indices of slices in the collapsed slice group
 
@@ -59,7 +60,7 @@ for cey = 1:y_skip
     cey_ind = cey : y_skip : cey + (param.Ry-1) * y_skip;
         
     if sum(sum(mask_use(:,cey_ind),1),2) > 0
-
+    i_f(:,:,:,ii) = (fftn(i_t(:,:,:,ii)));
         psfs = psf_use(:,cey_ind,:,:);
         rcv = receive_use(:,cey_ind,:,:);
 
