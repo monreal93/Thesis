@@ -29,7 +29,7 @@ cs(:,:,2,:) = CoilSensitivity(:,:,27,:);
 cs(:,:,3,:) = CoilSensitivity(:,:,47,:);
 
 slice_ind = 7:20:60;      % indices of slices in the collapsed slice group
-
+% slice_ind = slice_ind -1;
 msk_roi = (cs~=0);
 msk_roi = msk_roi(:,:,:,1);
 
@@ -60,7 +60,7 @@ for cey = 1:y_skip
     cey_ind = cey : y_skip : cey + (param.Ry-1) * y_skip;
         
     if sum(sum(mask_use(:,cey_ind),1),2) > 0
-    i_f(:,:,:,ii) = (fftn(i_t(:,:,:,ii)));
+
         psfs = psf_use(:,cey_ind,:,:);
         rcv = receive_use(:,cey_ind,:,:);
 
