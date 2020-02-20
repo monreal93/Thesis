@@ -8,28 +8,28 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Load data
-close all; clear all; clc
+% close all; clear all; clc
 
 load Data/img_wc.mat
 load Data/sens_map.mat
 load Data/psf_yz.mat
 load Data/param.mat
-load Data/phantom.mat
+% load Data/phantom.mat
 
 %% SENSE recon for Wave-CAIPI
 size_x = size(i_wc, 1)/param.ov;
 num_chan = size(i_wc, 4);
 y_skip = size(i_wc, 2);
+sl = 10;
 
 % Selecting slice 1 and CoilSensitv of 3 slices
-i_wc = i_wc(:,:,7,:);           
-cs = zeros(60,60,3,32);
-cs(:,:,1,:) = CoilSensitivity(:,:,7,:);
-cs(:,:,2,:) = CoilSensitivity(:,:,27,:);
-cs(:,:,3,:) = CoilSensitivity(:,:,47,:);
+cs = zeros(size(i_wc,2)*param.Ry,size(i_wc,3)*param.Ry,Ry,param.num_chan);
+cs(:,:,1,:) = CoilSensitivity(:,:,sl,:);
+cs(:,:,2,:) = CoilSensitivity(:,:,sl+size(i_wc,2),:);
+cs(:,:,3,:) = CoilSensitivity(:,:,sl+(size(i_wc,2)*2),:);
+i_wc = i_wc(:,:,sl,:); 
 
-slice_ind = 7:20:60;      % indices of slices in the collapsed slice group
-% slice_ind = slice_ind -1;
+slice_ind = sl:size(i_wc,2):size(i_wc,2)*param.Ry;      % indices of slices in the collapsed slice group
 msk_roi = (cs~=0);
 msk_roi = msk_roi(:,:,:,1);
 
@@ -63,7 +63,6 @@ for cey = 1:y_skip
 
         psfs = psf_use(:,cey_ind,:,:);
         rcv = receive_use(:,cey_ind,:,:);
-
         rhs = squeeze( i_wc(:,cey,:,:) );
 
         param.psfs = psfs;

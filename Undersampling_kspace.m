@@ -10,7 +10,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Add paths
-close all; clear all; clc
+% close all; clear all; clc
 addpath(genpath('/home/amonreal/gpuNUFFT-master/gpuNUFFT'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/shepp_logan3d'))
@@ -49,10 +49,11 @@ i_f = fftshift(fftn(i_t));
 i_fov = [size(i_t,1) size(i_t,2) size(i_t,3)];                                % Vector with fov, [x y z]
 p_s = [1e-3 1e-3 1e-3];                                                         % Vector with pixel size [x y z]
 voxel_size = p_s(1)*p_s(2)*p_s(3)*.001;                                % voxel size mm3
-x_points = i_fov(1)*ov;                                                             % number 6 if for oversampling, change if needed
-gy_gz_amplit = (6e-3)*4;                                                              % Max amplitude of sin readout gradients
+% x_points = i_fov(1)*ov;                                                             % number 6 if for oversampling, change if needed
+x_points = (i_fov(1)*ov)-1;                                                             % number 6 if for oversampling, change if needed
+gy_gz_amplit = (6e-3)*2;                                                              % Max amplitude of sin readout gradients
 sins = 4;                                                                                % # of sins per readout line      
-p_bw = 70*4;                                                                         % pixel BW, 70 from paper, *4 to compensate img size
+p_bw = 70*2;                                                                         % pixel BW, 70 from paper, *4 to compensate img size
 Ry = 3; Rz = 3;                                                                       % Undersampling factor      
 k_fov = 1./p_s;                                                                        % K-space FOV
 gamma = 42.58e6;                                                                % Gyromagnetic ratio
@@ -62,16 +63,20 @@ nCh=32;                                                                         
 
 %% Calculating parameters for Gradients
 t_r = 1/p_bw;
+% t_r = 1/(p_bw*size(i_t,1));
 delta_t = 1e-7;
 t_prime = delta_t:delta_t:t_r;
-t = 0+(t_r/x_points):t_r/x_points:t_r;
+% t = 0+(t_r/x_points):t_r/x_points:t_r;
+t =0:t_r/x_points:t_r;
 f = sins/t_r;
 omg = 2*pi*f;
 
 x_calc_points = length(t_prime);
 x_calc = ((-k_fov(1)/2)+(k_fov(1)/x_calc_points)):(k_fov(1))/x_calc_points:(k_fov(1)/2);
-y_calc = gamma*cumsum(gy_gz_amplit*sin(omg*t_prime)*delta_t);
-z_calc = gamma*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
+% y_calc = gamma*cumsum(gy_gz_amplit*sin(omg*t_prime)*delta_t);
+% z_calc = gamma*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
+y_calc = gamma*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
+z_calc = gamma*cumsum(gy_gz_amplit*sin(omg*t_prime)*delta_t);
 
 range_y = (k_fov(1)/2)-max(y_calc);
 range_z = (k_fov(1)/2)-max(z_calc);
@@ -79,14 +84,20 @@ x = interp1(t_prime,x_calc,t,'linear','extrap');
 y = interp1(t_prime,y_calc,t,'linear','extrap')+range_y;
 z =  interp1(t_prime,z_calc,t,'linear','extrap')+range_z;
 
+% figure; plot3(x,y,z)
+% figure; plot(x_calc,y_calc); hold on; plot(x_calc,z_calc)
+max(y)-min(y)
 % Defining spacing between helix in y and z directions
-del_ky = (k_fov(2)-((max(y)-min(y))*(i_fov(2)/Ry)))/(i_fov(2)/Ry)+(max(y)-min(y));
-del_kz = (k_fov(3)-((max(z)-min(z))*(i_fov(3)/Rz)))/(i_fov(3)/Rz)+(max(z)-min(z));
+% del_ky = (k_fov(2)-((max(y)-min(y))*(i_fov(2)/Ry)))/(i_fov(2)/Ry)+(max(y)-min(y));
+% del_kz = (k_fov(3)-((max(z)-min(z))*(i_fov(3)/Rz)))/(i_fov(3)/Rz)+(max(z)-min(z));
+del_ky = (k_fov(2)-((max(y)-min(y))*(i_fov(2)/Ry)))/((i_fov(2)/Ry)-1)+(max(y)-min(y));
+del_kz = (k_fov(3)-((max(z)-min(z))*(i_fov(3)/Rz)))/((i_fov(3)/Rz)-1)+(max(z)-min(z));
 
 original_y = y; 
 
 %%% Creating null matrices for K points
-kx = zeros(x_points,i_fov(2)/Ry,i_fov(3)/Rz);
+% kx = zeros(x_points,i_fov(2)/Ry,i_fov(3)/Rz);
+kx = zeros(x_points+1,i_fov(2)/Ry,i_fov(3)/Rz);
 ky =kx; kz = kx;
 
 %% Generate coil sensitivity
@@ -102,9 +113,9 @@ mask(i_t == 0) = 0;
 mask = repmat(mask,1,1,1,nCh);
 CoilSensitivity = CoilSensitivity.*mask;
 CoilSensitivity = CoilSensitivity./max(CoilSensitivity(:));
-if plt == 1
-    as(CoilSensitivity)
-end
+% if plt == 1
+%     as(CoilSensitivity)
+% end
 
 %% Generate K-space w/coil sensitivity for 32 channels
 i_t = repmat(i_t,1,1,1,32);
@@ -145,6 +156,7 @@ end
 
 %  Ploting all the trajerctories
 if plt == 1
+ figure;
     for j = 1:i_fov(2)/Ry    
         xx = squeeze(kx(:,j,:));
         yy = squeeze(ky(:,j,:));
@@ -204,37 +216,32 @@ if plt == 1
     scatter3(kx(:),ky(:),kz(:),ones(size(kz(:))).*50,abs(kspace_nufft(:,15)),'.')
     xlabel('Kx');ylabel('Ky');zlabel('Kz');view(3)
 end
-% kspace_nufft = reshape(kspace_nufft,N/Ry,N/Rz,N*ov);
 kspace_nufft = reshape(kspace_nufft,N*ov,N/Ry,N/Rz,nCh);
-% test_tr = reshape(tr(2,:),N*ov,N/Ry,N/Rz);
-% kspace_cartesian = FFT_3D_Edwin(i_t(:,:,:,1),'kspace' );
-
 
 %% Img WAVE-CAPI
 i_wc = zeros(size(kspace_nufft));
+% i_wc = FT'*kspace_nufft;
 
 % 3D ifft..
 for ii = 1:nCh
     i_wc(:,:,:,ii) = FFT_3D_Edwin(kspace_nufft(:,:,:,ii),'image');
 end
 
-% % 2D ifft, slice by slice..
-% for ii = 1:nCh
-%     for jj = 1:size(kspace_nufft,1)
-%         i_wc(jj,:,:,ii) = FFT_2D_Edwin(squeeze(kspace_nufft(jj,:,:,ii)),'image' );
-%     end
-% end
-
 as(i_wc)
 
 %% Creating cartersian trajectory
 del_c = 1./(i_fov.*p_s);
-x_c = zeros(x_points,size(i_t,2),size(i_t,3));
+% x_c = zeros(x_points,size(i_t,2),size(i_t,3));
+x_c = zeros(x_points+1,size(i_t,2),size(i_t,3));
 y_c = x_c;  z_c = x_c;
 
 xc = (k_fov(1)/2*-1)+(del_c(1)/ov):del_c(1)/ov:k_fov(1)/2;
-yc = repmat(i_fov(2)/2*-1+(p_s(2)),1,size(xc,2))*p_s(2);
-zc = repmat(i_fov(3)/2*-1+(p_s(3)),1,size(xc,2))*p_s(3);
+% yc = repmat(i_fov(2)/2*-1+(p_s(2)),1,size(xc,2))*p_s(2);
+% zc = repmat(i_fov(3)/2*-1+(p_s(3)),1,size(xc,2))*p_s(3);
+
+yc = repmat((i_fov(2)/2*-1),1,size(xc,2))*p_s(2)+(p_s(2)/2);
+zc = repmat((i_fov(3)/2*-1),1,size(xc,2))*p_s(3)+(p_s(3)/2);
+
 
 original_yc = yc;
 
@@ -265,12 +272,17 @@ end
 % end
 
 %% Creating PSFs
-psf_y = zeros(x_points,size(ky,2)*Ry);
-psf_z = zeros(x_points,size(kz,3)*Rz);
+% psf_y = zeros(x_points,size(ky,2)*Ry);
+% psf_z = zeros(x_points,size(kz,3)*Rz);
+psf_y = zeros(x_points+1,size(ky,2)*Ry);
+psf_z = zeros(x_points+1,size(kz,3)*Rz);
 
 Px = interp1(t_prime,x_calc,t,'linear','extrap');
 Py = interp1(t_prime,y_calc,t,'linear','extrap');
+% Py = Py-(max(Py)/2);
 Pz =  interp1(t_prime,z_calc,t,'linear','extrap');
+
+
 if plt==1
     figure; plot(Px,Py)
     hold on
@@ -290,6 +302,7 @@ end
     end
 
 psf_yz = repmat(psf_y,[1,1,size(psf_z,2)]) .* repmat(permute(psf_z, [1,3,2]), [1,size(psf_y,2),1]);
+% psf_yz = repmat(psf_z,[1,1,size(psf_y,2)]) .* repmat(permute(psf_y, [1,3,2]), [1,size(psf_z,2),1]);
 
 if plt == 1
     figure; imagesc(angle(psf_y).');colormap jet, axis image off ; title('PSF Y')
