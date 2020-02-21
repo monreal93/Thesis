@@ -53,7 +53,7 @@ voxel_size = p_s(1)*p_s(2)*p_s(3)*.001;                                % voxel s
 x_points = (i_fov(1)*ov)-1;                                                             % number 6 if for oversampling, change if needed
 gy_gz_amplit = (6e-3)*2;                                                              % Max amplitude of sin readout gradients
 sins = 4;                                                                                % # of sins per readout line      
-p_bw = 70*2;                                                                         % pixel BW, 70 from paper, *4 to compensate img size
+p_bw = 100;                                                                         % pixel BW, 70 from paper, *4 to compensate img size
 Ry = 3; Rz = 3;                                                                       % Undersampling factor      
 k_fov = 1./p_s;                                                                        % K-space FOV
 gamma = 42.58e6;                                                                % Gyromagnetic ratio
@@ -65,7 +65,7 @@ nCh=32;                                                                         
 t_r = 1/p_bw;
 % t_r = 1/(p_bw*size(i_t,1));
 delta_t = 1e-7;
-t_prime = delta_t:delta_t:t_r;
+t_prime = 0:delta_t:t_r;
 % t = 0+(t_r/x_points):t_r/x_points:t_r;
 t =0:t_r/x_points:t_r;
 f = sins/t_r;
@@ -279,7 +279,6 @@ psf_z = zeros(x_points+1,size(kz,3)*Rz);
 
 Px = interp1(t_prime,x_calc,t,'linear','extrap');
 Py = interp1(t_prime,y_calc,t,'linear','extrap');
-% Py = Py-(max(Py)/2);
 Pz =  interp1(t_prime,z_calc,t,'linear','extrap');
 
 
@@ -300,8 +299,10 @@ end
         zz = z_c(:,1,l); zz = zz(:)';
         psf_z(:,l) = exp(-1i*2*pi*Pz.*zz);
     end
-
-psf_yz = repmat(psf_y,[1,1,size(psf_z,2)]) .* repmat(permute(psf_z, [1,3,2]), [1,size(psf_y,2),1]);
+    
+%  psf_y = single(psf_y);
+%  psf_z = single(psf_z);
+ psf_yz = repmat(psf_y,[1,1,size(psf_z,2)]) .* repmat(permute(psf_z, [1,3,2]), [1,size(psf_y,2),1]);
 % psf_yz = repmat(psf_z,[1,1,size(psf_y,2)]) .* repmat(permute(psf_y, [1,3,2]), [1,size(psf_z,2),1]);
 
 if plt == 1

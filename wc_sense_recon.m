@@ -20,13 +20,21 @@ load Data/param.mat
 size_x = size(i_wc, 1)/param.ov;
 num_chan = size(i_wc, 4);
 y_skip = size(i_wc, 2);
-sl = 10;
+sl = 8;
 
 % Selecting slice 1 and CoilSensitv of 3 slices
 cs = zeros(size(i_wc,2)*param.Ry,size(i_wc,3)*param.Ry,Ry,param.num_chan);
 cs(:,:,1,:) = CoilSensitivity(:,:,sl,:);
-cs(:,:,2,:) = CoilSensitivity(:,:,sl+size(i_wc,2),:);
-cs(:,:,3,:) = CoilSensitivity(:,:,sl+(size(i_wc,2)*2),:);
+if param.Ry ==2 | param.Rz ==2
+    cs(:,:,2,:) = CoilSensitivity(:,:,sl+size(i_wc,2),:);
+elseif param.Ry ==3 | param.Rz ==3
+    cs(:,:,2,:) = CoilSensitivity(:,:,sl+size(i_wc,2),:);
+    cs(:,:,3,:) = CoilSensitivity(:,:,sl+(size(i_wc,2)*2),:);
+elseif param.Ry ==4 | param.Rz ==4
+    cs(:,:,2,:) = CoilSensitivity(:,:,sl+size(i_wc,2),:);
+    cs(:,:,3,:) = CoilSensitivity(:,:,sl+(size(i_wc,2)*2),:);
+    cs(:,:,4,:) = CoilSensitivity(:,:,sl+(size(i_wc,2)*3),:);
+end
 i_wc = i_wc(:,:,sl,:); 
 
 slice_ind = sl:size(i_wc,2):size(i_wc,2)*param.Ry;      % indices of slices in the collapsed slice group
