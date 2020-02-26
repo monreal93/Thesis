@@ -3,7 +3,7 @@
 %   -  How to define the indices of collapes slice group, line 30
 %   -  How to define the slice_ind, line 39
 %   -  Change code to work with all slices, line 24 only 1 slice
-%   - 
+%   -  Add logic to wrap slices around if selected sl  does not work...
 %   - 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -11,33 +11,37 @@
 % close all; clear all; clc
 
 load Data/img_wc.mat
-load Data/sens_map.mat
-load Data/psf_yz.mat
-load Data/param.mat
+% load Data/sens_map.mat
+% load Data/psf_yz.mat
+% load Data/param.mat
 % load Data/phantom.mat
+% aa = i_wc; i_wc = aa;
 
 %% SENSE recon for Wave-CAIPI
 size_x = size(i_wc, 1)/param.ov;
 num_chan = size(i_wc, 4);
 y_skip = size(i_wc, 2);
-sl = 8;
+sl_wc = 22;                                % Slice from the undersampled WAVE caipi image, < size of undersampled img.
 
-% Selecting slice 1 and CoilSensitv of 3 slices
-cs = zeros(size(i_wc,2)*param.Ry,size(i_wc,3)*param.Ry,Ry,param.num_chan);
-cs(:,:,1,:) = CoilSensitivity(:,:,sl,:);
-if param.Ry ==2 | param.Rz ==2
-    cs(:,:,2,:) = CoilSensitivity(:,:,sl+size(i_wc,2),:);
-elseif param.Ry ==3 | param.Rz ==3
-    cs(:,:,2,:) = CoilSensitivity(:,:,sl+size(i_wc,2),:);
-    cs(:,:,3,:) = CoilSensitivity(:,:,sl+(size(i_wc,2)*2),:);
-elseif param.Ry ==4 | param.Rz ==4
-    cs(:,:,2,:) = CoilSensitivity(:,:,sl+size(i_wc,2),:);
-    cs(:,:,3,:) = CoilSensitivity(:,:,sl+(size(i_wc,2)*2),:);
-    cs(:,:,4,:) = CoilSensitivity(:,:,sl+(size(i_wc,2)*3),:);
+% Selecting CoilSensitivity of only overlapped slices
+cs = zeros(size(i_wc,2)*param.Ry,size(i_wc,3)*param.Rz,Ry,param.num_chan);
+sl_i_t = (param.Rz*sl_wc)+((size(i_wc,2)/2)-sl_wc);
+cs(:,:,1,:) = CoilSensitivity(:,:,sl_i_t,:);
+if param.Ry>1
+    for ii=2:param.Ry
+        if (sl_i_t+size(i_wc,2)) > size(i_wc,2)*param.Ry
+            cs(:,:,ii,:) = CoilSensitivity(:,:,sl_i_t-size(i_wc,2),:);
+        else
+            cs(:,:,ii,:) = CoilSensitivity(:,:,sl_i_t+size(i_wc,2),:);
+        end
+    end
 end
-i_wc = i_wc(:,:,sl,:); 
 
-slice_ind = sl:size(i_wc,2):size(i_wc,2)*param.Ry;      % indices of slices in the collapsed slice group
+i_wc = i_wc(:,:,sl_wc,:); 
+
+slice_ind = sl_wc:size(i_wc,2):size(i_wc,2)*param.Ry;      % indices of slices in the collapsed slice group
+% slice_ind = sl*2:size(i_wc,2)/2:(size(i_wc,2)*param.Ry)-1;      % indices of slices in the collapsed slice group
+% slice_ind = [30 45];
 msk_roi = (cs~=0);
 msk_roi = msk_roi(:,:,:,1);
 
@@ -46,8 +50,13 @@ Img_WAVE = zeros(size(i_wc,1)/(param.ov),size(i_wc,2)*(param.Ry),size(i_wc,3)*(p
 lsqr_iter = 200;
 lsqr_tol = 1e-3; 
 
-shift_amount = [-1,0,1] .* size(i_wc,2) / 2;
-
+if param.Ry == 1
+    shift_amount = 0;
+elseif param.Ry ==2
+    shift_amount = [-1,1] .* size(i_wc,2)/ 2;
+elseif param.Ry ==3
+    shift_amount = [-1,0,1] .* size(i_wc,2)/ 2;
+end
 
 tic
 
@@ -62,6 +71,7 @@ for nz = 1:param.Rz
     mask_use(:,:,nz) = circshift(msk_roi(:,:,nz), [0,shift_amount(nz),0]);
 end
 mask_use = sum(mask_use,3);
+% mask_use = circshift(mask_use,-30,2);
     
 for cey = 1:y_skip
 

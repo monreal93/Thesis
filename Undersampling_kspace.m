@@ -45,20 +45,27 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/g
 N = 60;
 ov = 6;                                                                                 % Oversample factor
 i_t = phantom3d(N);
+
+% i_t = zeros(N);
+% for ii=1:N
+%     i_t(ii,ii,ii)=5;
+% end
+
 i_f = fftshift(fftn(i_t));                                                                  
 i_fov = [size(i_t,1) size(i_t,2) size(i_t,3)];                                % Vector with fov, [x y z]
 p_s = [1e-3 1e-3 1e-3];                                                         % Vector with pixel size [x y z]
 voxel_size = p_s(1)*p_s(2)*p_s(3)*.001;                                % voxel size mm3
 % x_points = i_fov(1)*ov;                                                             % number 6 if for oversampling, change if needed
 x_points = (i_fov(1)*ov)-1;                                                             % number 6 if for oversampling, change if needed
-gy_gz_amplit = (6e-3)*2;                                                              % Max amplitude of sin readout gradients
-sins = 4;                                                                                % # of sins per readout line      
-p_bw = 100;                                                                         % pixel BW, 70 from paper, *4 to compensate img size
-Ry = 3; Rz = 3;                                                                       % Undersampling factor      
+gy_gz_amplit = (8e-3);                                                              % Max amplitude of sin readout gradients
+gy_gz_amplit = (0.1e-3); 
+sins = 15;                                                                                % # of sins per readout line      
+p_bw = 140;                                                                         % pixel BW, 70 from paper, *4 to compensate img size
+Ry = 2; Rz =2;                                                                       % Undersampling factor      
 k_fov = 1./p_s;                                                                        % K-space FOV
 gamma = 42.58e6;                                                                % Gyromagnetic ratio
-caipi = true;                                                                           % 1 to dephase pair lines as in 2D CAIPI
-plt = 1;                                                                                   % 1 to plot all trajectories
+caipi = 1;                                                                           % 1 to dephase pair lines as in 2D CAIPI
+plt = 0;                                                                                   % 1 to plot all trajectories
 nCh=32;                                                                                 % number of coils
 
 %% Calculating parameters for Gradients
@@ -72,17 +79,19 @@ f = sins/t_r;
 omg = 2*pi*f;
 
 x_calc_points = length(t_prime);
+
+%For helix....
 x_calc = ((-k_fov(1)/2)+(k_fov(1)/x_calc_points)):(k_fov(1))/x_calc_points:(k_fov(1)/2);
 % y_calc = gamma*cumsum(gy_gz_amplit*sin(omg*t_prime)*delta_t);
 % z_calc = gamma*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
 y_calc = gamma*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
 z_calc = gamma*cumsum(gy_gz_amplit*sin(omg*t_prime)*delta_t);
-
 range_y = (k_fov(1)/2)-max(y_calc);
 range_z = (k_fov(1)/2)-max(z_calc);
 x = interp1(t_prime,x_calc,t,'linear','extrap');
 y = interp1(t_prime,y_calc,t,'linear','extrap')+range_y;
 z =  interp1(t_prime,z_calc,t,'linear','extrap')+range_z;
+
 
 % figure; plot3(x,y,z)
 % figure; plot(x_calc,y_calc); hold on; plot(x_calc,z_calc)
@@ -92,6 +101,10 @@ max(y)-min(y)
 % del_kz = (k_fov(3)-((max(z)-min(z))*(i_fov(3)/Rz)))/(i_fov(3)/Rz)+(max(z)-min(z));
 del_ky = (k_fov(2)-((max(y)-min(y))*(i_fov(2)/Ry)))/((i_fov(2)/Ry)-1)+(max(y)-min(y));
 del_kz = (k_fov(3)-((max(z)-min(z))*(i_fov(3)/Rz)))/((i_fov(3)/Rz)-1)+(max(z)-min(z));
+% making del_ky and del_kz as a function of FOV and undersamling
+del_ky = (1/(i_fov(2)*p_s(2))*Ry);
+del_kz = (1/(i_fov(3)*p_s(3))*Rz);
+
 
 original_y = y; 
 
@@ -213,14 +226,23 @@ kspace_nufft = FT*i_t;
 
 if plt == 1
     figure; view(2)
-    scatter3(kx(:),ky(:),kz(:),ones(size(kz(:))).*50,abs(kspace_nufft(:,15)),'.')
+    scatter3(kx(:),ky(:),kz(:),ones(size(kz(:))).*50,abs(kspace_nufft(:,1)),'.')
     xlabel('Kx');ylabel('Ky');zlabel('Kz');view(3)
 end
 kspace_nufft = reshape(kspace_nufft,N*ov,N/Ry,N/Rz,nCh);
+kspace_nufft = flip(kspace_nufft,2);
+kspace_nufft = flip(kspace_nufft,3);
 
 %% Img WAVE-CAPI
 i_wc = zeros(size(kspace_nufft));
 % i_wc = FT'*kspace_nufft;
+
+% % 2D fft, slice by slice..
+% for ii = 1:nCh
+%     for jj = 1:size(i_t,3)
+%         i_wc(:,:,jj,ii) = fftshift(ifft2(kspace_nufft(:,:,jj,ii)));
+%     end
+% end
 
 % 3D ifft..
 for ii = 1:nCh
