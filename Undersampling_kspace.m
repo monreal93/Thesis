@@ -10,7 +10,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Add paths
-% close all; clear all; clc
+clear all; clc
 addpath(genpath('/home/amonreal/gpuNUFFT-master/gpuNUFFT'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/shepp_logan3d'))
@@ -45,11 +45,8 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/g
 N = 60;
 ov = 6;                                                                                 % Oversample factor
 i_t = phantom3d(N);
-
-% i_t = zeros(N);
-% for ii=1:N
-%     i_t(ii,ii,ii)=5;
-% end
+% i_t= padarray(i_t,[3 3 3],'both');
+% N = size(i_t,1);
 
 i_f = fftshift(fftn(i_t));                                                                  
 i_fov = [size(i_t,1) size(i_t,2) size(i_t,3)];                                % Vector with fov, [x y z]
@@ -58,14 +55,15 @@ voxel_size = p_s(1)*p_s(2)*p_s(3)*.001;                                % voxel s
 % x_points = i_fov(1)*ov;                                                             % number 6 if for oversampling, change if needed
 x_points = (i_fov(1)*ov)-1;                                                             % number 6 if for oversampling, change if needed
 gy_gz_amplit = (8e-3);                                                              % Max amplitude of sin readout gradients
-gy_gz_amplit = (0.1e-3); 
-sins = 15;                                                                                % # of sins per readout line      
-p_bw = 140;                                                                         % pixel BW, 70 from paper, *4 to compensate img size
-Ry = 2; Rz =2;                                                                       % Undersampling factor      
+gy_gz_amplit = (8e-3); 
+sins = 14;                                                                               % # of sins per readout line      
+p_bw = 150;                                                                         % pixel BW, 70 from paper, *4 to compensate img size
+Ry =2; Rz =2;                                                                       % Undersampling factor      
 k_fov = 1./p_s;                                                                        % K-space FOV
 gamma = 42.58e6;                                                                % Gyromagnetic ratio
-caipi = 1;                                                                           % 1 to dephase pair lines as in 2D CAIPI
+caipi = 0;                                                                           % 1 to dephase pair lines as in 2D CAIPI
 plt = 0;                                                                                   % 1 to plot all trajectories
+sv = 0;                                                                                    % Save variables locally
 nCh=32;                                                                                 % number of coils
 
 %% Calculating parameters for Gradients
@@ -74,7 +72,7 @@ t_r = 1/p_bw;
 delta_t = 1e-7;
 t_prime = 0:delta_t:t_r;
 % t = 0+(t_r/x_points):t_r/x_points:t_r;
-t =0:t_r/x_points:t_r;
+t = linspace(0,t_r,N*ov);%0:t_r/x_points:t_r;
 f = sins/t_r;
 omg = 2*pi*f;
 
@@ -85,17 +83,15 @@ x_calc = ((-k_fov(1)/2)+(k_fov(1)/x_calc_points)):(k_fov(1))/x_calc_points:(k_fo
 % y_calc = gamma*cumsum(gy_gz_amplit*sin(omg*t_prime)*delta_t);
 % z_calc = gamma*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
 y_calc = gamma*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
+%y_calc = y_calc - mean(y_calc);
 z_calc = gamma*cumsum(gy_gz_amplit*sin(omg*t_prime)*delta_t);
+%z_calc = z_calc - mean(z_calc);
 range_y = (k_fov(1)/2)-max(y_calc);
 range_z = (k_fov(1)/2)-max(z_calc);
 x = interp1(t_prime,x_calc,t,'linear','extrap');
 y = interp1(t_prime,y_calc,t,'linear','extrap')+range_y;
 z =  interp1(t_prime,z_calc,t,'linear','extrap')+range_z;
 
-
-% figure; plot3(x,y,z)
-% figure; plot(x_calc,y_calc); hold on; plot(x_calc,z_calc)
-max(y)-min(y)
 % Defining spacing between helix in y and z directions
 % del_ky = (k_fov(2)-((max(y)-min(y))*(i_fov(2)/Ry)))/(i_fov(2)/Ry)+(max(y)-min(y));
 % del_kz = (k_fov(3)-((max(z)-min(z))*(i_fov(3)/Rz)))/(i_fov(3)/Rz)+(max(z)-min(z));
@@ -105,11 +101,10 @@ del_kz = (k_fov(3)-((max(z)-min(z))*(i_fov(3)/Rz)))/((i_fov(3)/Rz)-1)+(max(z)-mi
 del_ky = (1/(i_fov(2)*p_s(2))*Ry);
 del_kz = (1/(i_fov(3)*p_s(3))*Rz);
 
-
-original_y = y; 
+original_y = y;
+original_z = z;
 
 %%% Creating null matrices for K points
-% kx = zeros(x_points,i_fov(2)/Ry,i_fov(3)/Rz);
 kx = zeros(x_points+1,i_fov(2)/Ry,i_fov(3)/Rz);
 ky =kx; kz = kx;
 
@@ -147,34 +142,59 @@ for ii = 1:nCh
 end
 
 %%  Generating K-space Corkscrew trajectories
-for j=1:(i_fov(3)/Rz)
-    for l=1:(i_fov(2)/Ry)
-            kx(:,l,j) = x;
-            ky(:,l,j) = y;
-            kz(:,l,j) = z;
-            y = y -(del_ky);
+% for j=1:(i_fov(3)/Rz)
+%     for l=1:(i_fov(2)/Ry)
+%             kx(:,l,j) = x;
+%             ky(:,l,j) = y;
+%             kz(:,l,j) = z;
+%             y = y -(del_ky);
+% %         if (caipi == 1) &&(rem(j,2) ==0)&& (((k_fov/del_ky)-i)==1)
+% %            y = y -del_ky;
+% %             break 
+% %         end
+%     end
+%           z = z-(del_kz);
+%           y = original_y;
+%       if caipi
+%          if (rem(j,2) ==1)
+%                 y = y - (del_ky/2);
+%          end
+%       end
+% end
+
+%%% Different approach moving in z direction first and then y....
+% figure; hold on
+for j=1:(i_fov(2)/Ry)
+    for l=1:(i_fov(3)/Rz)
+            kx(:,j,l) = x;
+            ky(:,j,l) = y;
+            kz(:,j,l) = z;
+%             plot3(x,y,z)
+            z = z -(del_kz);
 %         if (caipi == 1) &&(rem(j,2) ==0)&& (((k_fov/del_ky)-i)==1)
 %            y = y -del_ky;
 %             break 
 %         end
     end
-          z = z-(del_kz);
-          y = original_y;
+          y = y-(del_ky);
+          z = original_z;
       if caipi
          if (rem(j,2) ==1)
-                y = y - (del_ky/2);
+                z = z - (del_kz/2);
          end
       end
 end
 
-%  Ploting all the trajerctories
+% figure;scatter(ky(:),kz(:)); xlabel('Ky');ylabel('Kz');axis image
+
+%  Ploting all the trajerctories1
 if plt == 1
  figure;
-    for j = 1:i_fov(2)/Ry    
-        xx = squeeze(kx(:,j,:));
-        yy = squeeze(ky(:,j,:));
-        zz = squeeze(kz(:,j,:));
-        for l=1:i_fov(3)/Rz
+    for j = 1:i_fov(2)/Rz   
+        xx = squeeze(kx(:,:,j));
+        yy = squeeze(ky(:,:,j));
+        zz = squeeze(kz(:,:,j));
+        for l=1:i_fov(3)/Ry
             plot3(xx(:,l),yy(:,l),zz(:,l));
             hold on
         end
@@ -209,6 +229,11 @@ end
 
 %% Generating NUFFT
 % Normalize trajectories
+tr_notScaled = zeros(3,length(kx(:)));
+tr_notScaled (1,:) = kx(:)./1;
+tr_notScaled (2,:) = ky(:)./1;
+tr_notScaled (3,:) = kz(:)./1;
+
 tr = zeros(3,length(kx(:)));
 tr(1,:) = kx(:)./k_fov(1);
 tr(2,:) = ky(:)./k_fov(2);
@@ -218,11 +243,17 @@ disp('Generate NUFFT Operator without coil sensitivities');
 disp_slice=N/2;
 useGPU = true;
 useMultiCoil = 0;
-osf = 2; wg = 3; sw = 8;
+osf = 2; wg = 3; sw = 5;
 imwidth = N;
-w = 1; % no density compensation for now
-FT = gpuNUFFT(tr,col(ones(size(kx(:)))),osf,wg,sw,[N,N,N],[],true);
+
+i_t = padarray(i_t,(((size(i_t,2)*ov)-size(i_t,2))/2),'both');
+CoilSensitivity = padarray(CoilSensitivity,(((size(i_t,2)*ov)-size(i_t,2))/2),'both');
+
+% w = iterative_dcf_estimation(tr_notScaled,6,2.1); % no density compensation for now
+% FT = gpuNUFFT(tr,w,osf,wg,sw,[N*ov,N,N],CoilSensitivity,true);
+FT = gpuNUFFT(tr,col(ones(size(kx(:)))),osf,wg,sw,[N*ov,N,N],CoilSensitivity,true);
 kspace_nufft = FT*i_t;
+test_nufft = kspace_nufft;
 
 if plt == 1
     figure; view(2)
@@ -232,6 +263,61 @@ end
 kspace_nufft = reshape(kspace_nufft,N*ov,N/Ry,N/Rz,nCh);
 kspace_nufft = flip(kspace_nufft,2);
 kspace_nufft = flip(kspace_nufft,3);
+
+%% new kspace
+% if caipi
+    kspace_new = zeros([size(kspace_nufft,1) size(kspace_nufft,2)*Ry size(kspace_nufft,3)*Rz size(kspace_nufft,4)]);
+    kk=1;
+    for iter = 1:N/Ry
+            if mod(iter,2) == 0
+                kspace_new(:,kk,2:Ry:end,:) = kspace_nufft(:,iter,:,:);
+                kk = kk+Ry;
+            else
+                 kspace_new(:,kk,1:Ry:end,:) = kspace_nufft(:,iter,:,:);
+                 kk = kk+Ry;
+            end 
+     end
+
+    test_img = FFT_3D_Edwin(kspace_new,'image' );
+    % test_img1 = test_img(:,16:16+29,16:16+29,:);
+    if Ry==1 || Rz==1    
+            if Ry==1
+                lwy = 1; upy = size(kspace_new,2);
+            else
+                lwy = (size(kspace_nufft,2)/Ry)+1;
+                upy = size(kspace_new,2) -(size(kspace_nufft,2)/Ry);
+            end
+            if Rz==1
+                lwz = 1; upz = size(kspace_new,3);
+            else
+                lwz = (size(kspace_nufft,3)/Rz)+1;
+                upz = size(kspace_new,3)-(size(kspace_nufft,3)/Rz);
+            end
+    else
+              lwy = (size(kspace_nufft,2)/Ry)+1;
+              upy = size(kspace_new,2) -(size(kspace_nufft,2)/Ry);
+              lwz = (size(kspace_nufft,3)/Rz)+1;
+              upz = size(kspace_new,3)-(size(kspace_nufft,3)/Rz);
+    end
+
+
+    test_img1 = test_img(:,lwy:upy,lwz:upz,:);
+    
+% end
+
+%% Adding zeros to the rest of the kspace grid, before FFT
+% kspace_new = zeros([size(kspace_nufft,1) size(kspace_nufft,2)*Ry size(kspace_nufft,3)*Rz size(kspace_nufft,4)]);
+% kspace_nufft = kspace_nufft(:);
+% aa = -499.985:2.7778:500.01;
+% [X Y Z] = meshgrid(aa);
+% X = X(:); Y=Y(:); Z=Z(:);
+% coo = [X Y Z];
+% aa = zeros(size(coo(:,1)));
+% coo = [coo aa];
+% kxx = kx(:,:,:,1); kyy = ky(:,:,:,1); kzz = kz(:,:,:,1); 
+% bb = [kxx(:) kyy(:) kzz(:)];
+
+
 
 %% Img WAVE-CAPI
 i_wc = zeros(size(kspace_nufft));
@@ -249,7 +335,17 @@ for ii = 1:nCh
     i_wc(:,:,:,ii) = FFT_3D_Edwin(kspace_nufft(:,:,:,ii),'image');
 end
 
+%Using the FT operator...
+test_nufft_back = FT' *test_nufft;
+% i_wc = test_nufft_back;
+
+if caipi==1
+    i_wc = test_img1;
+end
+
 as(i_wc)
+
+
 
 %% Creating cartersian trajectory
 del_c = 1./(i_fov.*p_s);
@@ -267,8 +363,8 @@ zc = repmat((i_fov(3)/2*-1),1,size(xc,2))*p_s(3)+(p_s(3)/2);
 
 original_yc = yc;
 
-for j=1:i_fov(2)
-    for l=1:i_fov(3)
+for j=1:i_fov(3)
+    for l=1:i_fov(2)
             x_c(:,l,j) = xc;
             y_c(:,l,j) = yc;
             z_c(:,l,j) = zc;
@@ -278,20 +374,20 @@ for j=1:i_fov(2)
           yc = original_yc;
 end
 
-% % Ploting all the trajerctories
-% if plt == 1
-% figure;
-%     for j = 1:i_fov(2)   
-%         for l=1:i_fov(3)
-%             xx = x_c(:,l,j); xx = xx(:)';
-%             yy = y_c(:,l,j); yy = yy(:)';
-%             zz = z_c(:,l,j); zz = zz(:)';
-%             plot3(xx,yy,zz);
-%             hold on
-%         end
-%     end
-%     xlabel('Kx');ylabel('y');zlabel('z');view(3); title('Hybrid K-space')
-% end
+% Ploting all the trajerctories
+if plt == 1
+figure;
+    for j = 1:i_fov(2)   
+        for l=1:i_fov(3)
+            xx = x_c(:,l,j); xx = xx(:)';
+            yy = y_c(:,l,j); yy = yy(:)';
+            zz = z_c(:,l,j); zz = zz(:)';
+            plot3(xx,yy,zz);
+            hold on
+        end
+    end
+    xlabel('Kx');ylabel('y');zlabel('z');view(3); title('Hybrid K-space');
+end
 
 %% Creating PSFs
 % psf_y = zeros(x_points,size(ky,2)*Ry);
@@ -342,7 +438,12 @@ param.Ry = Ry;
 param.Rz = Rz;
 param.ov = ov;
 
-save('Data/param.mat','param')
-save('Data/sens_map.mat','CoilSensitivity')
-save('Data/img_wc.mat','i_wc')
-save('Data/psf_yz.mat','psf_yz')
+if sv
+    save('Data/param.mat','param')
+    save('Data/sens_map.mat','CoilSensitivity')
+    save('Data/img_wc.mat','i_wc')
+    save('Data/psf_yz.mat','psf_yz')
+end
+
+%% Testing different stuff
+
