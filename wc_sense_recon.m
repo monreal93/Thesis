@@ -1,9 +1,9 @@
 %% Tasks
 %   -  
-%   -  How to define the indices of collapes slice group, line 30
-%   -  How to define the slice_ind, line 39
-%   -  Change code to work with all slices, line 24 only 1 slice
-%   -  Add logic to wrap slices around if selected sl  does not work...
+%   -  
+%   -  
+%   -  
+%   - 
 %   - 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -20,12 +20,10 @@ load Data/phantom.mat
 % CoilSensitivity = permute(CoilSensitivity,[1 3 2 4]);
 CoilSensitivity = CoilSensitivity((((size(i_t,2)*param.ov)-(size(i_t,2)))/2)+1:end-(((size(i_t,2)*param.ov)-(size(i_t,2)))/2),:,:,:);
 
-caipi2d = false;
-
+caipi2d = true;
 
 
 %% SENSE recon for Wave-CAIPI
-
 size_x = size(i_wc, 1)/param.ov;
 num_chan = size(i_wc, 4);
 y_skip = size(i_wc, 2);
@@ -54,7 +52,6 @@ end
 i_wc = i_wc(:,:,sl_wc,:); 
 
 slice_ind = sl_wc:size(i_wc,2):size(i_wc,2)*param.Ry;      % indices of slices in the collapsed slice group
-% slice_ind = sl*2:size(i_wc,2)/2:(size(i_wc,2)*param.Ry)-1;      % indices of slices in the collapsed slice group
 % slice_ind = [7 37];
 msk_roi = (cs~=0);
 msk_roi = msk_roi(:,:,:,1);
@@ -67,7 +64,7 @@ lsqr_tol = 1e-5;
 if param.Rz == 1
     shift_amount = 0;
 elseif param.Rz ==2
-    shift_amount = [-1,1] .* size(i_wc,2)/ 2;
+    shift_amount = [-1,0] .* size(i_wc,2)/ 2;
 elseif param.Rz ==3
     shift_amount = [-1,0,1] .* size(i_wc,2)/ 2;
 end
@@ -85,7 +82,6 @@ for nz = 1:param.Rz
     mask_use(:,:,nz) = circshift(msk_roi(:,:,nz), [0,shift_amount(nz),0]);
 end
 mask_use = sum(mask_use,3);
-% mask_use = circshift(mask_use,-30,2);
     
 for cey = 1:y_skip
 
@@ -113,46 +109,10 @@ end
 toc            
 
 as(Img_WAVE)
-% mosaic(imrotate(Img_WAVE(30:end-30,7:end-7,:), 90), 1, param.Rz, 3, 'Wave-CAIPI', [0,3e-2])
 
-%% SENSE recon for 2D-CAIPI
+    
+    %% SENSE recon for 2D-CAIPI
 if caipi2d
-    i_wc = i_wc(end/2-29:end/2+30,:,:,:);
-    Ry = 2;
-    Rz = 2;
-
-    size_x = size(i_wc, 1);
-    num_chan = size(i_wc, 4);
-    y_skip = size(i_wc, 2);
-
-
-    i_ind = zeros(num_chan*Ry*Rz*size_x, 1);
-    for t = 1:size_x
-        ind = 1+(t-1)*num_chan : t*num_chan;
-        ind = repmat(ind, [Ry*Rz,1]);
-        i_ind(1+(t-1)*Ry*Rz*num_chan : t*Ry*Rz*num_chan) = ind(:);
-    end
-
-
-    j_ind = zeros(num_chan*Ry*Rz*size_x, 1);
-    for t = 1:size_x
-        ind = 1 + (t-1)*Ry*Rz : t*Ry*Rz;
-        ind = repmat(ind(:), [1,num_chan]);    
-        j_ind(1+(t-1)*Ry*Rz*num_chan : t*Ry*Rz*num_chan) = ind(:);
-    end
-
-
-    % FOV/2 inter-slice shift
-    shift_amount = [-1,0,1] .* size(i_wc, 2) / 2;
-
-    Img_2DCAIPI = zeros(size(msk_roi));
-    warning('off','all');
-
-
-    tic
-
-    receive_us%% SENSE recon for 2D-CAIPI
-
     i_wc = i_wc(end/2-29:end/2+30,:,:,:);
     Ry = 2;
     Rz = 2;
@@ -223,7 +183,7 @@ if caipi2d
     end
     toc            
 
-    as(Img_2DCAIPI) = zeros(size(cs));
+    receive_use = zeros(size(cs));
     mask_use = zeros(size(msk_roi));
 
     for nz = 1:Rz
