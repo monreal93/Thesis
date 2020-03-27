@@ -1,3 +1,4 @@
+tic
 %% Tasks
 %   - Check modif needed in NUFFT part , for non-iso img
 %   - 
@@ -8,7 +9,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Add paths
-clear all; clc
+clear all; %clc
 addpath(genpath('/home/amonreal/gpuNUFFT-master/gpuNUFFT'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/shepp_logan3d'))
@@ -40,25 +41,27 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/g
 
 %% For Phantom
 %%% User input:
-N = 60;
+N = 80;
 ov = 6;                                                                                 % Oversample factor
-i_t = phantom3d(N);
+gy_gz_amplit = (12e-3);                                                          % Max amplitude of sin readout gradients 
+sins = 12;                                                                              % # of sins per readout line      
+p_bw = 500;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
+Ry =4; Rz =4;                                                                         % Undersampling factor
+caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
+plt = 0;                                                                                  % 1 to plot all trajectories
+sv = 0;                                                                                   % Save variables locally
+%%%
 
+i_t = phantom3d(N);
+% i_t = imnoise(i_t,'gaussian',0,0.001);
 i_f = fftshift(fftn(i_t));                                                                  
 i_fov = [size(i_t,1) size(i_t,2) size(i_t,3)];                                % Vector with fov, [x y z]
 p_s = [1e-3 1e-3 1e-3];                                                         % Vector with pixel size [x y z]
-voxel_size = p_s(1)*p_s(2)*p_s(3);                                % voxel size m3
-x_points = (i_fov(1)*ov)-1;                                                             % number 6 if for oversampling, change if needed
-gy_gz_amplit = (12e-3);                                                              % Max amplitude of sin readout gradients 
-sins = 12;                                                                               % # of sins per readout line      
-p_bw = 500;                                                                         % pixel BW, 70 from paper, *4 to compensate img size
-Ry =3; Rz =3;                                                                       % Undersampling factor      
-k_fov = 1./p_s;                                                                        % K-space FOV
-gamma = 42.58e6;                                                                % Gyromagnetic ratio
-caipi = 1;                                                                           % 1 to dephase pair lines as in 2D CAIPI
-plt = 0;                                                                                   % 1 to plot all trajectories
-sv = 0;                                                                                    % Save variables locally
-nCh=32;                                                                                 % number of coils
+voxel_size = p_s(1)*p_s(2)*p_s(3);                                         % voxel size m3
+x_points = (i_fov(1)*ov)-1;                                                      % number 6 if for oversampling, change if needed    
+k_fov = 1./p_s;                                                                       % K-space FOV
+gamma = 42.58e6;                                                               % Gyromagnetic ratio
+nCh=32;                                                                                % number of coils
 
 %% Calculating parameters for Gradients
 t_r = 1/p_bw;
@@ -67,7 +70,6 @@ t_prime = 0:delta_t:t_r;
 t = 0:t_r/x_points:t_r;
 f = sins/t_r;
 omg = 2*pi*f;
-
 x_calc_points = length(t_prime);
 
 %For helix....
@@ -86,11 +88,10 @@ z =  interp1(t_prime,z_calc,t,'linear','extrap')+range_z;
 % Defining spacing between helix in y and z directions
 del_ky = (1/(i_fov(2)*p_s(2))*Ry);
 del_kz = (1/(i_fov(3)*p_s(3))*Rz);
-
 original_y = y;
 original_z = z;
 
-%%% Creating null matrices for K points
+% Creating null matrices for K points
 kx = zeros(x_points+1,i_fov(2)/Ry,i_fov(3)/Rz);
 ky =kx; kz = kx;
 
@@ -114,18 +115,6 @@ end
 %% Generate K-space w/coil sensitivity for 32 channels
 i_t = repmat(i_t,1,1,1,32);
 i_t = i_t.*CoilSensitivity;
-
-% % 3D fft...
-% for ii = 1:nCh
-%     i_f(:,:,:,ii) = fftshift(fftn(i_t(:,:,:,ii)));
-% end
-% 
-% % 2D fft, slice by slice..
-% for ii = 1:nCh
-%     for jj = 1:size(i_t,3)
-%         i_f(:,:,jj,ii) = fftshift(fft2(i_t(:,:,jj,ii)));
-%     end
-% end
 
 %%  Generating K-space Corkscrew trajectories
 %%% Moving in y direction first and then z...
@@ -192,11 +181,6 @@ end
 
 %% Generating NUFFT
 % Normalize trajectories
-tr_notScaled = zeros(3,length(kx(:)));
-tr_notScaled (1,:) = kx(:)./1;
-tr_notScaled (2,:) = ky(:)./1;
-tr_notScaled (3,:) = kz(:)./1;
-
 tr = zeros(3,length(kx(:)));
 tr(1,:) = kx(:)./k_fov(1);
 tr(2,:) = ky(:)./k_fov(2);
@@ -210,8 +194,6 @@ osf = 2; wg = 3; sw = 5;
 imwidth = N;
 
 i_t = padarray(i_t,(((size(i_t,2)*ov)-size(i_t,2))/2),'both');
-%CoilSensitivity = padarray(CoilSensitivity,(((size(i_t,2)*ov)-size(i_t,2))/2),'both');
-
 FT = gpuNUFFT(tr,col(ones(size(kx(:)))),osf,wg,sw,[N*ov,N,N],[],true);
 kspace_nufft = FT*i_t;
 test_nufft = kspace_nufft;
@@ -225,76 +207,38 @@ kspace_nufft = reshape(kspace_nufft,N*ov,N/Ry,N/Rz,nCh);
 kspace_nufft = flip(kspace_nufft,2);
 kspace_nufft = flip(kspace_nufft,3);
 
-%% Adding zeros to skipping positions due to 2D CAIPI
+%% Adding zeros to skipping positions due to 2D CAIPI and generate WAVE-CAIPI image
+if caipi && Ry ~= 1 && Rz ~= 1    
     kspace_new = zeros([size(kspace_nufft,1) size(kspace_nufft,2)*Ry size(kspace_nufft,3)*Rz size(kspace_nufft,4)]);
     kk=1;
+ % Define the start position for the shifted row in CAIPI 
+    if Ry==4
+      mm=3;
+    else
+      mm=2;
+    end
+ 
     for iter = 1:N/Ry
             if mod(iter,2) == 0
-                kspace_new(:,kk,2:Ry:end,:) = kspace_nufft(:,iter,:,:);
+                kspace_new(:,kk,mm:Ry:end,:) = kspace_nufft(:,iter,:,:);
                 kk = kk+Ry;
             else
                  kspace_new(:,kk,1:Ry:end,:) = kspace_nufft(:,iter,:,:);
                  kk = kk+Ry;
             end 
-     end
+    end
+    
+    lwy = fix(((size(kspace_new,2)-size(kspace_nufft,2))/2)+1);
+    upy = lwy +(size(kspace_nufft,2))-1;
+    lwz = fix(((size(kspace_new,3)-size(kspace_nufft,3))/2)+1);
+    upz = lwz+(size(kspace_nufft,3))-1;  
 
     test_img = FFT_3D_Edwin(kspace_new,'image' );
-    if Ry==1 || Rz==1    
-            if Ry==1
-                lwy = 1; upy = size(kspace_new,2);
-            else
-                lwy = (size(kspace_nufft,2)/Ry)+1;
-                upy = size(kspace_new,2) -(size(kspace_nufft,2)/Ry);
-            end
-            if Rz==1
-                lwz = 1; upz = size(kspace_new,3);
-            else
-                lwz = (size(kspace_nufft,3)/Rz)+1;
-                upz = size(kspace_new,3)-(size(kspace_nufft,3)/Rz);
-            end
-    else
-        
-        if Ry==2
-              lwy = (size(kspace_nufft,2)/Ry)+1;
-              upy = size(kspace_new,2) -(size(kspace_nufft,2)/Ry);
-              lwz = (size(kspace_nufft,3)/Rz)+1;
-              upz = size(kspace_new,3)-(size(kspace_nufft,3)/Rz);
-        elseif Ry ==3
-              lwy = (size(kspace_new,2)/Ry)+1;
-              upy = lwy +(size(kspace_nufft,2))-1;
-              lwz = (size(kspace_new,3)/Rz)+1;
-              upz = lwz+(size(kspace_nufft,3))-1;
-        end
-
-    end
-
-
     test_img1 = test_img(:,lwy:upy,lwz:upz,:);
-
-%% Img WAVE-CAPI
-i_wc = zeros(size(kspace_nufft));
-
-% % 2D fft, slice by slice..
-% for ii = 1:nCh
-%     for jj = 1:size(i_t,3)
-%         i_wc(:,:,jj,ii) = fftshift(ifft2(kspace_nufft(:,:,jj,ii)));
-%     end
-% end
-
-% 3D ifft..
-for ii = 1:nCh
-    i_wc(:,:,:,ii) = FFT_3D_Edwin(kspace_nufft(:,:,:,ii),'image');
-end
-
-%Using the FT operator...
-test_nufft_back = FT' *test_nufft;
-% i_wc = test_nufft_back;
-
-if caipi==1
     i_wc = test_img1;
+else
+    i_wc = FFT_3D_Edwin(kspace_nufft,'image' );
 end
-
-% as(i_wc)
 
 %% Creating cartersian trajectory
 del_c = 1./(i_fov.*p_s);
@@ -386,4 +330,5 @@ if sv
 end
 
 wc_sense_recon
-   
+
+toc
