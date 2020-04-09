@@ -30,14 +30,14 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/g
 gy = (6e-3);                                                          % Max amplitude of sin Y gradient
 gz = (6e-3);                                                          % Max amplitude of sin Z gradient
 sinsy = 6;                                                                              % # of sins per readout line   
-sinsz = 6;                                                                              % # of sins per readout line 
+sinsz = 6;                                                                             % # of sins per readout line 
 p_bw = 800;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
 
 %% For Phantom
 %%% User input:
 N = 80;
 ov = 1;                                                                                 % Oversample factor
-Ry =4; Rz =4;                                                                         % Undersampling factor
+Ry =2; Rz =2;                                                                         % Undersampling factor
 caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
 plt = 0;                                                                                  % 1 to plot all trajectories
 sv = 0;                                                                                   % Save variables locally
@@ -189,118 +189,138 @@ if plt == 1
     figure; imagesc(angle(psf_z).');colormap jet, axis image off; title('PSF Z')
 end
 
-%% Calculating g-factor
-psf = repmat(psf_yz,[1 1 1 nCh]);
+%% Calculating g-factor Theoretical Method
+tic
 
+psf = repmat(psf_yz,[1 1 1 nCh]);
 % aa = (FFT_1D_Edwin(coilSensNew,'kspace',1));
 aa = (FFT_1D_Edwin(CoilSensitivity,'kspace',1));
 enc = psf.*aa;
 enc = FFT_1D_Edwin(enc,'image',1);
-
-% % enc_res = single(reshape(enc(:,:,40,: ),size(enc(:,:,40,: ),1)*size(enc(:,:,40,: ),2)*size(enc(:,:,40,: ),3),size(enc(:,:,40,: ),4)));
-% % enc_res = single(reshape(enc(:,:,20,: ),size(enc(:,:,20,: ),1)*size(enc(:,:,20,: ),2)*size(enc(:,:,20,: ),3),size(enc(:,:,20,: ),4)));
-% enc_res = single(reshape(enc(:,:,10,: ),size(enc(:,:,20,: ),1)*size(enc(:,:,20,:),2)*size(enc(:,:,20,: ),3),size(enc(:,:,20,: ),4)));
-% % enc_res = single(reshape(enc,size(enc,1)*size(enc,2),size(enc,4)*size(enc,3))); %% this one seems to work ok,
-% % enc_res = single(reshape(permute(enc,[1 4 2 3]),size(enc,1)*size(enc,2),size(enc,4)*size(enc,3)));
-% % enc_res = single(reshape(permute(enc(:,:,20,: ),[4 1 2 3]),size(enc(:,:,20,: ),4),size(enc(:,:,20,: ),2)*size(enc(:,:,20,: ),1)*size(enc(:,:,20,: ),3)));
-% EE = enc_res*enc_res';
-
-% % % enc_res = single(reshape(enc,size(enc,1)*size(enc,4),size(enc,2)*size(enc,3)));
-% % % enc_res = single(reshape(permute(enc,[1 4 2 3]),size(enc,4)*size(enc,3),size(enc,1)*size(enc,2)));
-% % enc_res = single(reshape(permute(enc,[4 3 1 2]),size(enc,4)*size(enc,3)*size(enc,1),size(enc,2)));
-% % Good approach
-% enc_res = single(reshape(permute(enc(:,:,20,: ),[4 3 1 2]),size(enc(:,:,40,: ),4)*size(enc(:,:,40,: ),1),size(enc(:,:,40,: ),2)*size(enc(:,:,40,: ),3)));
-% EE = enc_res'*enc_res;
+% enc = CoilSensitivity;
 
 % Only collapsed colums and slices...
-g_img = zeros(N,N,N);
+g_img_t = zeros(N,N,N);
 for jj=1:N/Rz  %2D
 sli = jj:N/Rz:N;
-%     if sli(4)>80
-%         sli(4) = sli(4)-80;
-%     end
-
     for ii=1:N/Ry
         col=ii:N/Ry:N;
         enc_res = single(reshape(permute(enc(:,col,sli,: ),[1 4 2 3]),N*nCh,Ry*Rz));
-% enc_res = single(reshape(permute(enc(:,col,jj,: ),[1 4 2 3]),N*nCh,Rz));      %2D
-        
         for kk=1:N
-            pix = kk:N:N*nCh;
-            enc_res1 = enc_res(pix,:);
+            enc_res1 = enc(kk,col,sli,:);
+            enc_res1 = reshape(permute(enc_res1,[1 4 2 3]),nCh,[]);
             EE = enc_res1'*enc_res1;
             % Approach 1 Theoretical
             EE_inv = pinv((EE));
             EE_diag = diag(EE);
             EE_inv_diag = abs(diag(EE_inv));
-
             g_f = sqrt(EE_diag.*EE_inv_diag);
             g_f = reshape(g_f,1,Ry,Rz);
-%             g_f = reshape(g_f,1,Ry);       % 2D
-            
-            if sum(g_f) ~= 0
-%                 xx;
-            end
-            
-%             xx = g_f(g_f~=0);
-%             min(xx,[],'all')
-%             max(xx,[],'all')
-
-            g_img(pix(1),col,sli)=g_f;
-%             g_img(pix(1),col,jj)=g_f;  %2D
+            g_img_t(kk,col,sli)=g_f;
+%             % Approach 2 iterative
+%             g_f = zeros(1,size(EE,1));
+%             for ll=1:size(EE,1)
+%                 e_rho = zeros(size(EE,1),1);
+%                 e_rho(ll) = 1;
+%                 [d,flag]=lsqr(EE,e_rho);
+%                 g_f(ll) = sqrt(e_rho'*d)*sqrt(e_rho'*EE*e_rho);
+%             end
+%                 g_f = reshape(g_f,1,Ry,Rz);
+%                 g_img(kk,col,sli)=g_f;
         end
-%         xx;
     end
-%     xx;
 end
 
-as(g_img)
-xx = g_img(g_img~=0);
-min(xx,[],'all')
-max(xx,[],'all')
+disp('Theoretical method: ')
+toc
 
-% % Approach 2
-% ec=zeros(6400,1);
-% e_rho = zeros(6400,1);
-% g_factor = zeros(80,80,80);
-% 
-% ec(3201,1) = 1;
-% d = lsqr(EE,ec,1e-6,800);
-% e_rho(3201,1) = 1;
-% g_f = sqrt(e_rho'*d)*sqrt(e_rho'*EE*e_rho);
-% abs(g_f)
+msk=i_t;
+msk(msk~=0) = 1;
+g_img_t = g_img_t.*msk;
+as(g_img_t)
+
+%% Calculating g-factor Iterative Method
+tic
+
+psf = repmat(psf_yz,[1 1 1 nCh]);
+% aa = (FFT_1D_Edwin(coilSensNew,'kspace',1));
+aa = (FFT_1D_Edwin(CoilSensitivity,'kspace',1));
+enc = psf.*aa;
+enc = FFT_1D_Edwin(enc,'image',1);
+% enc = CoilSensitivity;
+
+% Only collapsed colums and slices...
+g_img_i = zeros(N,N,N);
+for jj=1:N/Rz  %2D
+sli = jj:N/Rz:N;
+    for ii=1:N/Ry
+        col=ii:N/Ry:N;
+        enc_res = single(reshape(permute(enc(:,col,sli,: ),[1 4 2 3]),N*nCh,Ry*Rz));
+        for kk=1:N
+            enc_res1 = enc(kk,col,sli,:);
+            enc_res1 = reshape(permute(enc_res1,[1 4 2 3]),nCh,[]);
+            EE = enc_res1'*enc_res1;
+%             % Approach 1 Theoretical
+%             EE_inv = pinv((EE));
+%             EE_diag = diag(EE);
+%             EE_inv_diag = abs(diag(EE_inv));
+%             g_f = sqrt(EE_diag.*EE_inv_diag);
+%             g_f = reshape(g_f,1,Ry,Rz);
+%             g_img(kk,col,sli)=g_f;
+            % Approach 2 iterative
+            g_f = zeros(1,size(EE,1));
+            for ll=1:size(EE,1)
+                e_rho = zeros(size(EE,1),1);
+                e_rho(ll) = 1;
+                [d,flag]=lsqr(EE,e_rho);
+                g_f(ll) = sqrt(e_rho'*d)*sqrt(e_rho'*EE*e_rho);
+            end
+                g_f = reshape(g_f,1,Ry,Rz);
+                g_img_i(kk,col,sli)=g_f;
+        end
+    end
+end
+
+disp('Iterative method: ')
+toc
+
+msk=i_t;
+msk(msk~=0) = 1;
+g_img_i = g_img_i.*msk;
+as(g_img_i)
 
 %% Aproach from internet
-C = squeeze(CoilSensitivity(:,:,40,:));
-RX=2;
-RY=1;
-[NX NY L] = size(C);
-NRX = NX/RX;
-NRY = NY/RY;
-g = zeros(NX,NY);
-nc = zeros(NX,NY);
-for ii=1:NX
-    for jj=1:NY
-        if abs(C(ii,jj,1)) < 1e-6
-            g(ii,jj) = 0;
-        else
-            for LX=0:RX-1
-                for LY=0:RY-1
-                    ndx = mod((ii-1)+LX*NRX,NX)+1;
-                    ndy = mod((jj-1)+LY*NRY,NY)+1;
-                    CT = C(ndx, ndy, :);
-                    CT = CT(:);
-                    if ((LX==0) && (LY==0))
-                        s = CT;
-                    elseif abs(CT(1)) > 1e-6
-                        s = [s CT];
-                    end
-                end
-                nc(ii,jj) = nc(ii,jj)+1;
-            end
-         scs = s'*s;
-        scsi = inv(scs);
-        g(ii,jj) = sqrt(scs(1,1)*scsi(1,1));
-        end
-    end
-end
+% C = squeeze(CoilSensitivity(:,:,40,:));
+% RX=1;
+% RY=2;
+% [NX NY L] = size(C);
+% NRX = NX/RX;
+% NRY = NY/RY;
+% g = zeros(NX,NY);
+% nc = zeros(NX,NY);
+% for ii=1:NX
+%     for jj=1:NY
+%         if abs(C(ii,jj,1)) < 1e-6
+%             g(ii,jj) = 0;
+%         else
+%             for LX=0:RX-1
+%                 for LY=0:RY-1
+%                     ndx = mod((ii-1)+LX*NRX,NX)+1;
+%                     ndy = mod((jj-1)+LY*NRY,NY)+1;
+%                     CT = C(ndx, ndy, :);
+%                     CT = CT(:);
+%                     if ((LX==0) && (LY==0))
+%                         s = CT;
+%                     elseif abs(CT(1)) > 1e-6
+%                         s = [s CT];
+%                     end
+%                 end
+%                 nc(ii,jj) = nc(ii,jj)+1;
+%             end
+%          scs = s'*s;
+%         scsi = inv(scs);
+%         g(ii,jj) = sqrt(scs(1,1)*scsi(1,1));
+%         end
+%     end
+% end
+% as(g)
