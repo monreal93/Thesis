@@ -31,13 +31,13 @@ gy = (6e-3);                                                          % Max ampl
 gz = (6e-3);                                                          % Max amplitude of sin Z gradient
 sinsy = 6;                                                                              % # of sins per readout line   
 sinsz = 6;                                                                             % # of sins per readout line 
-p_bw = 800;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
+p_bw = 400;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
 
 %% For Phantom
 %%% User input:
 N = 80;
 ov = 1;                                                                                 % Oversample factor
-Ry =2; Rz =2;                                                                         % Undersampling factor
+Ry =4; Rz =4;                                                                         % Undersampling factor
 caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
 plt = 0;                                                                                  % 1 to plot all trajectories
 sv = 0;                                                                                   % Save variables locally
@@ -90,8 +90,8 @@ ky =kx; kz = kx;
 
 %% Generate coil sensitivity
 z_offset = [-0.025 0.025];
-coil_radius = 0.14;                         % radius from image origin
-loop_radius = 0.08;                        % radius of coil
+coil_radius = 0.01;                         % radius from image origin
+loop_radius = 0.06;                        % radius of coil
 Resolution = 3e-3;
 [CoilSensitivity1] = GenerateCoilSensitivity4Sim(size(i_t),[Resolution Resolution Resolution],coil_radius,loop_radius,z_offset(1),nCh./2);
 [CoilSensitivity2] = GenerateCoilSensitivity4Sim(size(i_t),[Resolution Resolution Resolution],coil_radius,loop_radius,z_offset(2),nCh./2);
@@ -112,9 +112,8 @@ coilSensNew = CoilSensitivity.*repmat(IntensityCorrection,1,1,1,nCh);
 coilSensNew(isinf(coilSensNew)) = 0;
 coilSensNew(isnan(coilSensNew)) = 0;
 
-CoilSensitivity = coilSensNew;
+% CoilSensitivity = coilSensNew;
 
-% CoilSensitivity=coilSensNew;
 % load 'Data/CoilSens_decorr_80.mat'
 % CoilSensitivity=imnoise(CoilSensitivity,'Gaussian',0,0.001);
 
@@ -237,6 +236,8 @@ toc
 msk=i_t;
 msk(msk~=0) = 1;
 g_img_t = g_img_t.*msk;
+g_av_t = mean(g_img_t(g_img_t~=0));
+g_max_t = max(g_img_t,[],'all');
 as(g_img_t)
 
 %% Calculating g-factor Iterative Method
@@ -287,12 +288,29 @@ toc
 msk=i_t;
 msk(msk~=0) = 1;
 g_img_i = g_img_i.*msk;
+g_av_i = mean(g_img_t(g_img_i~=0));
+g_max_i = max(g_img_i,[],'all');
 as(g_img_i)
 
-%% Aproach from internet
+%% Optimize Coil Sens params and g-factor aproach from internet
+% z_offset = [-0.025 0.025];
+% % coil_radius = 0.14;                         % radius from image origin
+% % loop_radius = 0.08;                        % radius of coil
+% coil_radius = 0.1;                         % radius from image origin
+% loop_radius = 0.06;                        % radius of coil
+% Resolution = 3e-3;
+% [CoilSensitivity1] = GenerateCoilSensitivity4Sim(size(i_t),[Resolution Resolution Resolution],coil_radius,loop_radius,z_offset(1),nCh./2);
+% [CoilSensitivity2] = GenerateCoilSensitivity4Sim(size(i_t),[Resolution Resolution Resolution],coil_radius,loop_radius,z_offset(2),nCh./2);
+% CoilSensitivity = cat(4,CoilSensitivity1,CoilSensitivity2);
+% mask = ones(size(i_t));
+% mask(i_t == 0) = 0;
+% mask = repmat(mask,1,1,1,nCh);
+% CoilSensitivity = CoilSensitivity.*mask;
+% CoilSensitivity = CoilSensitivity./max(CoilSensitivity(:));
+% 
 % C = squeeze(CoilSensitivity(:,:,40,:));
-% RX=1;
-% RY=2;
+% RX=4;
+% RY=4;
 % [NX NY L] = size(C);
 % NRX = NX/RX;
 % NRY = NY/RY;

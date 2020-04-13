@@ -1,4 +1,20 @@
 tic
+
+% clear all; clc;
+% grad = 3e-3:3e-3:15e-3;
+% sines = 4:4:20;
+% pixels = 100:100:500;
+% oo=0;
+% info=zeros(125,5);
+% 
+% for ll=1:size(grad,2)
+%     for jj=1:size(sines,2)
+%             for kk=1:size(pixels,2)
+%                 
+% gy_gz_amplit = grad(ll);                                                          % Max amplitude of sin readout gradients 
+% sins = sines(jj);                                                                      % # of sins per readout line      
+% p_bw = pixels(kk);                                                                  % pixel BW, 70 from paper, *4 to compensate img size
+
 %% Tasks
 %   - Check modif needed in NUFFT part , for non-iso img
 %   - 
@@ -43,9 +59,11 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/g
 %%% User input:
 N = 80;
 ov = 6;                                                                                 % Oversample factor
-gy_gz_amplit = (12e-3);                                                          % Max amplitude of sin readout gradients 
-sins = 12;                                                                              % # of sins per readout line      
-p_bw = 500;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
+gy = (6e-3);                                                          % Max amplitude of sin Y gradient
+gz = (6e-3);                                                          % Max amplitude of sin Z gradient
+sinsy = 6;                                                                              % # of sins per readout line   
+sinsz = 6;                                                                              % # of sins per readout line 
+p_bw = 400;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
 Ry =4; Rz =4;                                                                         % Undersampling factor
 caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
 plt = 0;                                                                                  % 1 to plot all trajectories
@@ -68,16 +86,18 @@ t_r = 1/p_bw;
 delta_t = 1e-7;
 t_prime = 0:delta_t:t_r;
 t = 0:t_r/x_points:t_r;
-f = sins/t_r;
-omg = 2*pi*f;
+fy = sinsy/t_r;
+fz = sinsz/t_r;
+omgy = 2*pi*fy;
+omgz = 2*pi*fz;
 x_calc_points = length(t_prime);
 
 %For helix....
 x_calc = ((-k_fov(1)/2)+(k_fov(1)/x_calc_points)):(k_fov(1))/x_calc_points:(k_fov(1)/2);
 x_calc = x_calc-mean(x_calc);
-y_calc = gamma*cumsum(gy_gz_amplit*cos(omg*t_prime)*delta_t);
+y_calc = gamma*cumsum(gy*cos(omgy*t_prime)*delta_t);
 %y_calc = y_calc - mean(y_calc);
-z_calc = gamma*cumsum(gy_gz_amplit*sin(omg*t_prime)*delta_t);
+z_calc = gamma*cumsum(gz*sin(omgz*t_prime)*delta_t);
 %z_calc = z_calc - mean(z_calc);
 range_y = (k_fov(1)/2)-max(y_calc);
 range_z = (k_fov(1)/2)-max(z_calc);
@@ -97,8 +117,8 @@ ky =kx; kz = kx;
 
 %% Generate coil sensitivity
 z_offset = [-0.025 0.025];
-coil_radius = 0.14;                         % radius from image origin
-loop_radius = 0.08;                        % radius of coil
+coil_radius = 0.01;                         % radius from image origin
+loop_radius = 0.06;                        % radius of coil
 Resolution = 3e-3;
 [CoilSensitivity1] = GenerateCoilSensitivity4Sim(size(i_t),[Resolution Resolution Resolution],coil_radius,loop_radius,z_offset(1),nCh./2);
 [CoilSensitivity2] = GenerateCoilSensitivity4Sim(size(i_t),[Resolution Resolution Resolution],coil_radius,loop_radius,z_offset(2),nCh./2);
@@ -186,15 +206,23 @@ tr(1,:) = kx(:)./k_fov(1);
 tr(2,:) = ky(:)./k_fov(2);
 tr(3,:) = kz(:)./k_fov(3);
 
+% %%% Density compensation
+% tr_notScaled = zeros(3,length(kx(:)));
+% tr_notScaled (1,:) = kx(:)./1;
+% tr_notScaled (2,:) = ky(:)./1;
+% tr_notScaled (3,:) = kz(:)./1;
+% w = iterative_dcf_estimation(tr_notScaled,6,2.1); 
+
 disp('Generate NUFFT Operator without coil sensitivities');
 disp_slice=N/2;
 useGPU = true;
 useMultiCoil = 0;
-osf = 2; wg = 3; sw = 5;
+osf = 2; wg = 3; sw = 8;
 imwidth = N;
 
 i_t = padarray(i_t,(((size(i_t,2)*ov)-size(i_t,2))/2),'both');
 FT = gpuNUFFT(tr,col(ones(size(kx(:)))),osf,wg,sw,[N*ov,N,N],[],true);
+% FT = gpuNUFFT(tr,w,osf,wg,sw,[N*ov,N,N],[],true);
 kspace_nufft = FT*i_t;
 test_nufft = kspace_nufft;
 
@@ -206,6 +234,23 @@ end
 kspace_nufft = reshape(kspace_nufft,N*ov,N/Ry,N/Rz,nCh);
 kspace_nufft = flip(kspace_nufft,2);
 kspace_nufft = flip(kspace_nufft,3);
+
+%% Noise decorrelation
+SNR = 25;
+%add noise to data
+addpath('D:\MATLAB\External Functions\addGaussianNoise')
+%prewithen rawdata
+rawData_withNoise_Undersampled= reshape(kspace_nufft,[],nCh);
+% rawData_withNoise_Fullysampled= complex(zeros(size(kspace_nufft_fully_sampled)));
+noise_level = 0.00125*max(kspace_nufft(:));
+noise = noise_level*complex(randn(size(rawData_withNoise_Undersampled)),randn(size(rawData_withNoise_Undersampled)));
+noiseCovariance_Undersampled = noise_covariance_mtx(noise);
+rawData_withNoise_Undersampled = rawData_withNoise_Undersampled + noise;
+dmtx_Undersampled = noise_decorrelation_mtx(noiseCovariance_Undersampled);
+rawData_withNoise_Undersampled = apply_noise_decorrelation_mtx(rawData_withNoise_Undersampled,dmtx_Undersampled);
+% smaps_prew = apply_noise_decorrelation_mtx(rawData_withNoise_Undersampled,dmtx_Undersampled); 
+DECorrelatedSensitivity_Undersampled  = apply_noise_decorrelation_mtx(CoilSensitivity,dmtx_Undersampled);
+% CoilSensitivity=DECorrelatedSensitivity_Undersampled; save('Data/CoilSens_decorr_80.mat','CoilSensitivity');
 
 %% Adding zeros to skipping positions due to 2D CAIPI and generate WAVE-CAIPI image
 if caipi && Ry ~= 1 && Rz ~= 1    
@@ -239,6 +284,8 @@ if caipi && Ry ~= 1 && Rz ~= 1
 else
     i_wc = FFT_3D_Edwin(kspace_nufft,'image' );
 end
+
+as(i_wc)
 
 %% Creating cartersian trajectory
 del_c = 1./(i_fov.*p_s);
@@ -332,3 +379,10 @@ end
 wc_sense_recon
 
 toc
+
+%             end
+% fprintf('DoDone with Gradients \n')          
+%     end
+% fprintf('DoDone with Sins \n')
+% end
+% fprintf('DoDone with Pixel_BW \n')

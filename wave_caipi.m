@@ -22,8 +22,8 @@ os_size = 580;
 load PsfY_fit
 load PsfZ_fit
 
-figure(11), imagesc( angle(PsfY_fit).' ), colormap jet, axis image off
-figure(12), imagesc( angle(PsfZ_fit).' ), colormap jet, axis image off
+figure(11), imagesc( angle(PsfY_fit).' ), colormap jet, axis image off; title('PSF Y')
+figure(12), imagesc( angle(PsfZ_fit).' ), colormap jet, axis image off; title('PSF Z')
 
 %% Wave-CAIPI : Ry=3 & Rz=3
 %% load undersampled slice group acquired with Wave-CAIPI

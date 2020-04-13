@@ -16,7 +16,7 @@
 
 %% User input
 caipi2d = false;
-recon_all_sl = false;
+recon_all_sl = true;
 sl_wc = 7;                                % Slice from the undersampled WAVE caipi image, < size of undersampled img.
 
 %% SENSE recon for Wave-CAIPI
@@ -55,7 +55,7 @@ for iter_wc = 1:last_iter_wc
     slice_ind(1) = sl_i_t;
     for ii=2:param.Ry
             if (sl_i_t+size(i_wc_sl,2)) > size(i_wc_sl,2)*param.Ry
-                sl_i_t = sl_i_t-size(i_wc_sl,2);
+                sl_i_t = sl_i_t+size(i_wc_sl,2)-size(CoilSensitivity,2);
                 cs(:,:,ii,:) = CoilSensitivity(:,:,sl_i_t,:);
                 slice_ind(ii)=sl_i_t;
             else
@@ -123,9 +123,18 @@ end
 
 %% Calculatin RMSE
 aa=phantom3d(N);
-bb=aa(:,:,slice_ind);
+% load('Data/phantom_80_gpuNUFFT.mat');
+bb=double(aa(:,:,slice_ind));
 rmse=immse(Img_WAVE,bb);
 fprintf('\n The mean-squared error is %0.4f\n', rmse);
+
+% %% Saving information in a Table
+% oo=oo+1;
+% info(oo,1)=Ry;
+% info(oo,2)=gy_gz_amplit;
+% info(oo,3)=sins;
+% info(oo,4)=p_bw;
+% info(oo,5)=rmse;
 
 %% SENSE recon for 2D-CAIPI
 if caipi2d
