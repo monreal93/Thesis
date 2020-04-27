@@ -16,7 +16,7 @@
 
 %% User input
 caipi2d = false;
-recon_all_sl = true;
+recon_all_sl = false;
 sl_wc = 7;                                % Slice from the undersampled WAVE caipi image, < size of undersampled img.
 
 %% SENSE recon for Wave-CAIPI
@@ -47,23 +47,36 @@ for iter_wc = 1:last_iter_wc
         sl_i_t=sl_wc;
     else
         % R is pair
-        sl_i_t = sl_wc+(size(i_wc,2)/2);
+        sl_i_t = sl_wc+(size(i_wc,3)/2);
     end
 
     % Extracting CS of only overlaped slices and getting slice indices
     cs(:,:,1,:) = CoilSensitivity(:,:,sl_i_t,:);
     slice_ind(1) = sl_i_t;
+%     for ii=2:param.Ry
+%             if (sl_i_t+size(i_wc_sl,2)) > size(i_wc_sl,2)*param.Ry
+%                 sl_i_t = sl_i_t+size(i_wc_sl,2)-size(CoilSensitivity,2);
+%                 cs(:,:,ii,:) = CoilSensitivity(:,:,sl_i_t,:);
+%                 slice_ind(ii)=sl_i_t;
+%             else
+%                 sl_i_t = sl_i_t+size(i_wc_sl,2);
+%                 cs(:,:,ii,:) = CoilSensitivity(:,:,sl_i_t,:);
+%                 slice_ind(ii)=sl_i_t;
+%             end
+%     end
+
     for ii=2:param.Ry
-            if (sl_i_t+size(i_wc_sl,2)) > size(i_wc_sl,2)*param.Ry
-                sl_i_t = sl_i_t+size(i_wc_sl,2)-size(CoilSensitivity,2);
+            if (sl_i_t+size(i_wc,3)) > size(i_wc,3)*param.Rz
+                sl_i_t = sl_i_t+size(i_wc,3)-size(CoilSensitivity,3);
                 cs(:,:,ii,:) = CoilSensitivity(:,:,sl_i_t,:);
                 slice_ind(ii)=sl_i_t;
             else
-                sl_i_t = sl_i_t+size(i_wc_sl,2);
+                sl_i_t = sl_i_t+size(i_wc,3);
                 cs(:,:,ii,:) = CoilSensitivity(:,:,sl_i_t,:);
                 slice_ind(ii)=sl_i_t;
             end
     end
+
 
         msk_roi = (cs~=0);
         msk_roi = msk_roi(:,:,:,1);

@@ -25,7 +25,7 @@ tic
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Add paths
-clear all; %clc
+% clear all; %clc
 addpath(genpath('/home/amonreal/gpuNUFFT-master/gpuNUFFT'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/shepp_logan3d'))
@@ -56,19 +56,19 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/g
 % plt = 0;                                                                                   % 1 to plot all trajectories
 
 %% For Phantom
-%%% User input:
+% %%% User input:
 N = 80;
 ov = 6;                                                                                 % Oversample factor
 gy = (6e-3);                                                          % Max amplitude of sin Y gradient
-gz = (6e-3);                                                          % Max amplitude of sin Z gradient
+gz = (10*6e-3);                                                          % Max amplitude of sin Z gradient
 sinsy = 6;                                                                              % # of sins per readout line   
-sinsz = 6;                                                                              % # of sins per readout line 
-p_bw = 400;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
+sinsz = 6*2;                                                                              % # of sins per readout line 
+p_bw = 400*2;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
 Ry =4; Rz =4;                                                                         % Undersampling factor
 caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
 plt = 0;                                                                                  % 1 to plot all trajectories
 sv = 0;                                                                                   % Save variables locally
-%%%
+% %%%
 
 i_t = phantom3d(N);
 % i_t = imnoise(i_t,'gaussian',0,0.001);
@@ -236,21 +236,21 @@ kspace_nufft = flip(kspace_nufft,2);
 kspace_nufft = flip(kspace_nufft,3);
 
 %% Noise decorrelation
-SNR = 25;
-%add noise to data
-addpath('D:\MATLAB\External Functions\addGaussianNoise')
-%prewithen rawdata
-rawData_withNoise_Undersampled= reshape(kspace_nufft,[],nCh);
-% rawData_withNoise_Fullysampled= complex(zeros(size(kspace_nufft_fully_sampled)));
-noise_level = 0.00125*max(kspace_nufft(:));
-noise = noise_level*complex(randn(size(rawData_withNoise_Undersampled)),randn(size(rawData_withNoise_Undersampled)));
-noiseCovariance_Undersampled = noise_covariance_mtx(noise);
-rawData_withNoise_Undersampled = rawData_withNoise_Undersampled + noise;
-dmtx_Undersampled = noise_decorrelation_mtx(noiseCovariance_Undersampled);
-rawData_withNoise_Undersampled = apply_noise_decorrelation_mtx(rawData_withNoise_Undersampled,dmtx_Undersampled);
-% smaps_prew = apply_noise_decorrelation_mtx(rawData_withNoise_Undersampled,dmtx_Undersampled); 
-DECorrelatedSensitivity_Undersampled  = apply_noise_decorrelation_mtx(CoilSensitivity,dmtx_Undersampled);
-% CoilSensitivity=DECorrelatedSensitivity_Undersampled; save('Data/CoilSens_decorr_80.mat','CoilSensitivity');
+% SNR = 25;
+% %add noise to data
+% addpath('D:\MATLAB\External Functions\addGaussianNoise')
+% %prewithen rawdata
+% rawData_withNoise_Undersampled= reshape(kspace_nufft,[],nCh);
+% % rawData_withNoise_Fullysampled= complex(zeros(size(kspace_nufft_fully_sampled)));
+% noise_level = 0.00125*max(kspace_nufft(:));
+% noise = noise_level*complex(randn(size(rawData_withNoise_Undersampled)),randn(size(rawData_withNoise_Undersampled)));
+% noiseCovariance_Undersampled = noise_covariance_mtx(noise);
+% rawData_withNoise_Undersampled = rawData_withNoise_Undersampled + noise;
+% dmtx_Undersampled = noise_decorrelation_mtx(noiseCovariance_Undersampled);
+% rawData_withNoise_Undersampled = apply_noise_decorrelation_mtx(rawData_withNoise_Undersampled,dmtx_Undersampled);
+% % smaps_prew = apply_noise_decorrelation_mtx(rawData_withNoise_Undersampled,dmtx_Undersampled); 
+% DECorrelatedSensitivity_Undersampled  = apply_noise_decorrelation_mtx(CoilSensitivity,dmtx_Undersampled);
+% % CoilSensitivity=DECorrelatedSensitivity_Undersampled; save('Data/CoilSens_decorr_80.mat','CoilSensitivity');
 
 %% Adding zeros to skipping positions due to 2D CAIPI and generate WAVE-CAIPI image
 if caipi && Ry ~= 1 && Rz ~= 1    
@@ -352,6 +352,7 @@ end
     end 
 
  psf_yz = repmat(psf_y,[1,1,size(psf_z,2)]) .* repmat(permute(psf_z, [1,3,2]), [1,size(psf_y,2),1]);
+ 
  
 if plt == 1
     figure; imagesc(angle(psf_y).');colormap jet, axis image off ; title('PSF Y')
