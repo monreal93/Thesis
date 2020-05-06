@@ -46,27 +46,27 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/F
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/gpuNUFFT/gpuNUFFT-master/matlab/demo/utils'));
 
 %% WAVE-CAIPI parameters
-gy = (6e-3);                                                                            % Max amplitude of sin Y gradient
-gz = (6e-3);                                                                           % Max amplitude of sin Z gradient
-sinsy = 6;                                                                              % # of sins per readout line   
-sinsz = 6;                                                                              % # of sins per readout line 
-p_bw = 250;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
+gy = (16e-3);                                                                            % Max amplitude of sin Y gradient
+gz = (16e-3);                                                                           % Max amplitude of sin Z gradient
+sinsy = 16;                                                                              % # of sins per readout line   
+sinsz = 16;                                                                              % # of sins per readout line 
+p_bw = 450;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
 gf =  1;                                                                                  % G-Factor method, 1=teoretical, 2=iterative, 3=both
 
 %% General parameters
 N = 80;
-slices = 40;
-ov = 6;                                                                                 % Oversample factor
-Ry =4; Rz =4;                                                                         % Undersampling factor
-caipi = 0;                                                                               % 1 to dephase pair lines as in 2D CAIPI
+slices = 80;
+ov = 3;                                                                                % Oversample factor
+Ry =2; Rz =2;                                                                         % Undersampling factor
+caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
 plt = 0;                                                                                  % 1 to plot all trajectories
 sv = 0;                                                                                   % Save variables locally
 
 %% Coil parameters
-z_offset = [-0.025 0.025];
+z_offset = [-0.025 0.025]*(240/slices);
 coil_radius = (N+30)/1000/2;                         % radius from image origin
-loop_radius = N*0.06/240;                        % radius of coil
-Resolution = 1e-3;
+loop_radius = N*0.5/240;                        % radius of coil   
+Resolution = 3e-3;
 
 %% For Phantom
 i_t = phantom3d(N);
@@ -113,7 +113,7 @@ CoilSensitivity = padarray(CoilSensitivity,(N*(ov-1))/2,'both');
 
 %% Calculating G-Factor
 if gf == 1 || gf==3
-    [g_img_t,g_av_t,g_max_t]=gfact_teo(N,slices,Ry,Rz,nCh,i_t,psf_yz,CoilSensitivity,ov);
+    [g_img_t,g_av_t,g_max_t]=gfact_teo(N,slices,Ry,Rz,nCh,i_t,psf_yz,CoilSensitivity,ov,caipi);
 end
 if gf == 2 || gf==3
     [g_img_i,g_av_i,g_max_i]=gfact_iter(N,slices,Ry,Rz,nCh,i_t,psf_yz,CoilSensitivity,ov);

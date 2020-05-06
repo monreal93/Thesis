@@ -1,5 +1,5 @@
 %% Tasks
-%   -  
+%   -  Fix so reconstruction works with R=3...
 %   -  
 %   -  
 %   - 
@@ -17,7 +17,7 @@
 %% User input
 caipi2d = false;
 recon_all_sl = false;
-sl_wc = 7;                                % Slice from the undersampled WAVE caipi image, < size of undersampled img.
+sl_wc = 10;                                % Slice from the undersampled WAVE caipi image, < size of undersampled img.
 
 %% SENSE recon for Wave-CAIPI
 size_x = size(i_wc, 1)/param.ov;
@@ -49,6 +49,7 @@ for iter_wc = 1:last_iter_wc
         % R is pair
         sl_i_t = sl_wc+(size(i_wc,3)/2);
     end
+    sl_i_t = sl_wc;
 
     % Extracting CS of only overlaped slices and getting slice indices
     cs(:,:,1,:) = CoilSensitivity(:,:,sl_i_t,:);
@@ -87,7 +88,7 @@ for iter_wc = 1:last_iter_wc
         if param.Rz == 1
             shift_amount = 0;
         elseif param.Rz ==2
-            shift_amount = [-1,0] .* size(i_wc_sl,2)/ 2;
+            shift_amount = [0,1] .* size(i_wc_sl,2)/ 2;
         elseif param.Rz ==3
             shift_amount = [-1,0,1] .* size(i_wc_sl,2)/ 2;
         elseif param.Rz == 4
