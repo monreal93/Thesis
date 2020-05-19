@@ -1,24 +1,23 @@
-function i_wc = imag_wc(N,slices,Ry,Rz,caipi,caipi_del,kspace_nufft,plt)
+function i_wc = imag_wc(kspace_nufft,param)
 
-if caipi && Ry ~= 1 || Rz ~= 1    
+if param.caipi && param.Ry ~= 1 || param.Rz ~= 1    
 
-kspace_new = single(zeros([size(kspace_nufft,1) size(kspace_nufft,2)*Ry size(kspace_nufft,3)*Rz size(kspace_nufft,4)]));
+kspace_new = single(zeros([size(kspace_nufft,1) size(kspace_nufft,2)*param.Ry size(kspace_nufft,3)*param.Rz size(kspace_nufft,4)]));
 kz_i=1;
 ky_i=1;
 
-% This one work for R3, I think this is the right one
-        for ii=1:Rz
-            kspace_new(:,ky_i:Ry*Ry:end,kz_i:Rz:end,:) = kspace_nufft(:,ii:Ry:end,:,:);  % for R=2
-            kz_i = kz_i+caipi_del;
-            ky_i = ky_i+(Ry);
-            if kz_i>Rz
+        for ii=1:param.Rz
+            kspace_new(:,ky_i:param.Ry*param.Ry:end,kz_i:param.Rz:end,:) = kspace_nufft(:,ii:param.Ry:end,:,:);
+            kz_i = kz_i+param.caipi_del;
+            ky_i = ky_i+param.Ry;
+            if kz_i>param.Rz
                 kz_i=1;
             end
         end
 
     % Cropping from start
-    lwy = 1; upy=N/Ry;
-    lwz = 1; upz=slices/Rz;
+    lwy = 1; upy=param.N/param.Ry;
+    lwz = 1; upz=param.slices/param.Rz;
 
     test_img = FFT_3D_Edwin(kspace_new,'image' );
     test_img1 = test_img(:,lwy:upy,lwz:upz,:);
