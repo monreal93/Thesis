@@ -12,11 +12,11 @@ x_calc_points = length(t_prime);
 
 %For helix....
 x_calc = ((-param.k_fov(1)/2)+(param.k_fov(1)/x_calc_points)):(param.k_fov(1))/x_calc_points:(param.k_fov(1)/2);
-x_calc = x_calc-mean(x_calc);
+% x_calc = x_calc-mean(x_calc);
 y_calc = param.gamma*cumsum(param.gy*cos(omgy*t_prime)*delta_t);
-%y_calc = y_calc - mean(y_calc);
+% y_calc = y_calc - mean(y_calc);
 z_calc = param.gamma*cumsum(param.gz*sin(omgz*t_prime)*delta_t);
-%z_calc = z_calc - mean(z_calc);
+% z_calc = z_calc - mean(z_calc);
 range_y = (param.k_fov(1)/2)-max(y_calc);
 range_z = (param.k_fov(1)/2)-max(z_calc);
 x = interp1(t_prime,x_calc,t,'linear','extrap');

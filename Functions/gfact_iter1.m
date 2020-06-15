@@ -1,50 +1,68 @@
-function [g_mean]=gfact_iter1(N,slices,Ry,Rz,nCh,psf_yz,CoilSensitivity,ov)
+function [g_mean]=gfact_iter1(psf_yz,CoilSensitivity,param)
 
-        tic
-        
-        psf = repmat(psf_yz,[1 1 1 nCh]);
-        aa = (FFT_1D_Edwin(CoilSensitivity,'kspace',1));
-        enc = psf.*aa;
-        enc = FFT_1D_Edwin(enc,'image',1);
-        % 2D CAIPI effect
-        enc_test1 = enc;
-%         enc_test1 = circshift(enc_test1,N/Rz/2,3);
-        for ii=1:slices/Rz
-            if Rz==2
-                shift=slices-(slices/(Rz*Rz));
-            elseif Rz==4
-                shift=(slices/Rz)*2;
-            elseif Rz==1
-                shift=1;
-            end
-            enc_test1(:,:,ii:shift:slices,:) = circshift(enc_test1(:,:,ii:shift:slices,:),N/2,2);
-        end
-        enc = enc_test1;
+psf = repmat(psf_yz,[1 1 1 param.nCh]);
+CoilSensitivity = padarray(CoilSensitivity,((param.N*param.ov)-param.N)/2,'both');
+aa = (FFT_1D_Edwin(CoilSensitivity,'kspace',1));
+enc = psf.*aa;
+enc = FFT_1D_Edwin(enc,'image',1);
 
-if Rz ==2
-    sli=[32 64];
-    col1=16+(N/Ry/2):N/Ry:N+(N/Ry/2);
-    col2=16:N/Ry:N; 
-elseif Rz==4
-    sli=[16 32 48 64];
-    col1=8+(N/Ry/2):N/Ry:N+(N/Ry/2);
-    col2=8:N/Ry:N; 
+col = zeros(param.Ry/param.caipi_del,param.Rz);
+enc_res = zeros(param.N*param.ov*param.nCh,param.Ry*param.Rz);
+
+for mm=1:param.Rz-1
+    shift_amount(mm+1) = mm;
 end
+shift_amount = shift_amount .* ((param.N/param.Rz)/(param.Rz/param.caipi_del));
+shift_amount = floor(shift_amount);
 
-enc_res_1 = double(reshape(permute(enc(:,col2,sli(1:Rz/2:end-1),: ),[1 4 2 3]),N*ov*nCh,Rz*Ry/2));
-enc_res_2 = double(reshape(permute(enc(:,col1,sli(2:Rz/2:end),: ),[1 4 2 3]),N*ov*nCh,Rz*Ry/2));
-enc_res = [enc_res_1(:,1:Ry) enc_res_2(:,1:Ry) enc_res_1(:,Ry+1:end) enc_res_2(:,Ry+1:end)];
-s = CoilSensitivity(:,:,N/2,:);
-s = double(reshape(permute(s,[1 4 2 3]),N*ov*nCh,N));
+% center slice with collapsed slices
+sli = param.slices/2:param.slices/param.Rz:param.slices+(param.slices/param.Rz);
+if max(sli(:)) > param.slices
+    [val,idx] = max(sli(:));
+    sli(idx) = val-param.slices;
+end
+sli=unique(sli);
+sli = reshape(sli,param.Rz,[]);
+
+% center colum with collapsed colums
+for mm=1:param.Rz/param.caipi_del
+    aa = (param.N/2)+shift_amount(mm):param.N/param.Ry:param.N+((param.N/param.Rz)*2);
+    aa = aa(1:param.Ry);
+    col(mm,:) = aa;
+    if max(col(:)) > param.N
+        idx = find(col>param.N);
+        col(idx) = col(idx)-param.N;
+    end
+end
+col = repmat(col,param.caipi_del,1);
+                
+for mm=1:param.Rz
+    enc_res(:,mm:param.Rz:end) = double(reshape(permute(enc(:,col(mm,:),sli(mm,:),:),[1 4 2 3]),param.N*param.ov*param.nCh,param.Rz));
+end
+enc_res = enc_res((param.N*param.ov)/2:param.N*param.ov:end,:);
+ 
+s = CoilSensitivity(:,:,param.N/2,:);
+s = double(reshape(permute(s,[1 4 2 3]),param.N*param.ov*param.nCh,param.N));
 SS = s'*s;
 
 EE = enc_res'*enc_res;
 
-d = zeros(Ry*Rz,1);
-ec = zeros(Ry*Rz,1);
-ec((Ry*Rz/2),1) = 1;
-[d,flag]=lsqr(EE,ec);
+% % Iterative approach:
+% d = zeros(param.Ry*param.Rz,1);
+% ec = zeros(param.Ry*param.Rz,1);
+% ec((param.Ry*param.Rz/2),1) = 1;
+% [d,flag]=lsqr(EE,ec);
+% g_c = sqrt((ec'*d).*SS(param.N/2,param.N/2));
 
-g_c = sqrt((ec'*d).*SS(N/2,N/2));
+% Theroetical approach:
+EE_inv = pinv((EE));
+EE_diag = diag(EE);
+EE_inv_diag = (diag(EE_inv));
+g_f = sqrt(EE_diag.*EE_inv_diag);
+g_f = reshape(g_f,param.Ry,param.Rz);
+g_c = real(g_f(1));
+
 g_mean = real(1+(0.37*(g_c-1)));
+
+end
 

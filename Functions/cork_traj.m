@@ -63,6 +63,7 @@ ky=ky-mean(ky(:));
 kz=kz-mean(kz(:));
 
 % figure;scatter(kz(:),ky(:),'.');title('k-space trajectory');xlabel('Kz');ylabel('Ky');axis image
+figure;scatter3(kx(:),ky(:),kz(:),'.');title('k-space trajectory');xlabel('Kx');ylabel('Ky');zlabel('kz');axis image; view([0 90 0]);
 
 % Calculating real pixel size
 r_ps = [1./(max(kx(:))-min(kx(:))) 1./(max(ky(:))-min(ky(:))) 1./(max(kz(:))-min(kz(:)))];

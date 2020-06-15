@@ -7,8 +7,12 @@ kz_i=1;
 ky_i=1;
 
         for ii=1:param.Rz
-            kspace_new(:,ky_i:param.Ry*param.Ry:end,kz_i:param.Rz:end,:) = kspace_nufft(:,ii:param.Ry:end,:,:);
-            kz_i = kz_i+param.caipi_del;
+            if param.Ry == 1
+                kspace_new(:,ky_i:(param.Ry*param.Rz)+(param.Rz-param.caipi_del):end,kz_i:param.Rz:end,:) = kspace_nufft(:,ii:param.Ry+(param.Rz-param.caipi_del):end,:,:);
+            else
+                kspace_new(:,ky_i:param.Ry*param.Rz:end,kz_i:param.Rz:end,:) = kspace_nufft(:,ii:param.Ry:end,:,:);
+            end
+                kz_i = kz_i+param.caipi_del;
             ky_i = ky_i+param.Ry;
             if kz_i>param.Rz
                 kz_i=1;

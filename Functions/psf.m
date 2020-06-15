@@ -36,6 +36,7 @@ figure;
     xlabel('Kx');ylabel('y');zlabel('z');view(3); title('Hybrid K-space');
 end
 
+
 %% Creating PSF
 psf_y = zeros(param.x_points+1,param.N);
 psf_z = zeros(param.x_points+1,param.slices);
@@ -70,17 +71,20 @@ psf_f=FFT_1D_Edwin(psf_yz,'image',1);
 psf_f1 = psf_f(:,:,1);
 t_r = 1/param.p_bw;
 t_smp = param.ov*param.N;
-fq = t_smp./t_r;
+fq = (t_smp)./t_r;
 x=psf_f1(:,1);
-x=FFT_2D_Edwin(x,'kspace',2,3);
-x=x(:); x = x-mean(x);
+% x=FFT_2D_Edwin(x,'kspace',2,3);
+x = FFT_1D_Edwin(x,'kspace',2);
+x=x(:); %x = x-mean(x);
 n=param.N*param.ov;
 f=(-n/2:n/2-1)*(fq/n);
+% f = f-(n/param.p_bw/2);
 power=abs(x).^2/n;
 figure;subplot(2,1,1); imagesc(abs(psf_f1.')); title('Psf')
 sz=param.N*param.p_bw;
-subplot(2,1,2); plot(f,power);  title('Power spectrum'); xlabel('Frequency Hz');
-
+five_per = repmat(0.20*max(power),[1 size(power)]);
+subplot(2,1,2); plot(f,power);  title('Power spectrum'); xlabel('Frequency Hz'); xlim([min(f) max(f)]);
+hold on; plot(f,five_per);
 %%%
 
 if param.plt == 1

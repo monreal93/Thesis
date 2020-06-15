@@ -1,41 +1,5 @@
-tic
-
-% clear all; clc;
-% N = 80;
-% ov = 1;                                                                                 % Oversample factor
-% Ry =4; Rz =4;                                                                         % Undersampling factor
-% caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
-% plt = 0;                                                                                  % 1 to plot all trajectories
-% sv = 0;                                                                                   % Save variables locally
-% 
-% rty = 1.988e-04;                                                                         % Raise time for Y grad in s
-% rtz = 7.6923e-06;                                                                       % Raise time for Z grad  in s
-% 
-% grady = 3e-3:3e-3:30e-3;
-% gradz = 40e-3:3e-3:200e-3;
-% pixels = 100:50:500;
-% 
-% oo=0;
-% info=zeros(125,5);
-% 
-% for nnn=1:size(pixels,2)
-%     p_bw = pixels(nnn);
-%     t_r = 1/p_bw;
-%     limy = t_r/rty;
-%     limz = t_r/rtz;
-%     sinesy = 2:1:limy;
-%     sinesz = 2:1:limz;
-%     for jjj=1:size(grady,2)
-%         gy = grady(jjj);
-%         for kkk = 1:size(gradz,2)
-%             gz = gradz(kkk);
-%             for lll=1:size(sinesy,2)
-%                 sinsy = sinesy(lll);
-%                 for mmm=1:size(sinesz,2)
-%                     sinsz = sinesz(mmm);
-
 %% Add paths
-%clear all; %clc
+clear all; %clc
 addpath(genpath('/home/amonreal/gpuNUFFT-master/gpuNUFFT'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/shepp_logan3d'))
@@ -45,80 +9,105 @@ addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/g
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/Fessler_nufft'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/gpuNUFFT/gpuNUFFT-master/matlab/demo/utils'));
 
-%% WAVE-CAIPI parameters
-gy = (16e-3);                                                                            % Max amplitude of sin Y gradient
-gz = (16e-3);                                                                           % Max amplitude of sin Z gradient
-sinsy = 16;                                                                              % # of sins per readout line   
-sinsz = 16;                                                                              % # of sins per readout line 
-p_bw = 450;                                                                          % pixel BW, 70 from paper, *4 to compensate img size
-gf =  1;                                                                                  % G-Factor method, 1=teoretical, 2=iterative, 3=both
+%% G-Factor method selection
+gf =  5;                                                                % G-Factor method, 1=teoretical, 2=iterative, 3=fast, 4=pseudo 5=all
 
-%% General parameters
-N = 80;
-slices = 80;
-ov = 3;                                                                                % Oversample factor
-Ry =2; Rz =2;                                                                         % Undersampling factor
-caipi = 1;                                                                               % 1 to dephase pair lines as in 2D CAIPI
-plt = 0;                                                                                  % 1 to plot all trajectories
-sv = 0;                                                                                   % Save variables locally
+%% For Phantom                   
+param = [];
+param.N = 80;                                                    % In plane resolution
+param.slices = 80;                                               % number of slices
+param.gy = (6e-3);                                              % Max amplitude of sin Y gradient
+param.gz = (6e-3);                                              % Max amplitude of sin Z gradient
+param.sinsy = 6;                                                 % # of sins per readout line   
+param.sinsz = 6;                                                % # of sins per readout line 
+param.p_bw = 100;                                             % pixel BW
+param.Ry = 4;                                                     % Undersampling factor in Y 
+param.Rz = 4;                                                      % Undersampling factor in Z
+param.caipi_del=2;                                             % 2D-CAIPI delta
+param.caipi = 1;                                                 % 1 to for 2D-CAIPI sampling
+param.p_s = [1e-3 1e-3 1e-3];                            % Vector with pixel size [x y z]
+param.plt = 0;                                                    % 1 to plot all trajectories
+param.ov = ov(param);
+param.gpu = true;
+param.cs = 1;                                                     % CoilSensitivity, 1=from file, 0=simulated
+param.nufft = false;                                            % Use NUFFT to create Wave image, false = use psf only
+i_t = phantom3d(param.N); 
 
-%% Coil parameters
-z_offset = [-0.025 0.025]*(240/slices);
-coil_radius = (N+30)/1000/2;                         % radius from image origin
-loop_radius = N*0.5/240;                        % radius of coil   
-Resolution = 3e-3;
+%% Calculating max sines
+gz_sr = 1300;                                                      % Z Gradient slew rate
+gy_sr = 200;                                                        % Y Gradient slew rate
+t_r = 1./param.p_bw;
+gz_rt = 1/(gz_sr/param.gz);           % Z Gradient raise time
+gy_rt = 1/(gy_sr/param.gy);          % Y Gradient raise time
+max_sinsy = floor(t_r./(4*gy_rt));
+max_sinsz = floor(t_r./(4*gz_rt));
 
-%% For Phantom
-i_t = phantom3d(N);
-% i_t = imnoise(i_t,'gaussian',0,0.001);                                                                
-i_fov = [size(i_t,1) size(i_t,2) size(i_t,3)];                                % Vector with fov, [x y z]
-p_s = [1e-3 1e-3 1e-3];                                                         % Vector with pixel size [x y z]
-voxel_size = p_s(1)*p_s(2)*p_s(3);                                         % voxel size m3
-x_points = (i_fov(1)*ov)-1;                                                      % number 6 if for oversampling, change if needed    
-k_fov = 1./p_s;                                                                       % K-space FOV
-gamma = 42.58e6;                                                               % Gyromagnetic ratio
-nCh=32;                                                                                % number of coils
+%% Other paramets
+%%% Receiver coil parameters
+param.nCh=32;                                                   % number of channels
+param.coil_radius = (param.N+50)/1000;           % radius from image origin
+param.loop_radius = param.N*0.06/240;            % radius of coil   
+param.z_offset = [-3*(3/4)*param.loop_radius -(3/4)*param.loop_radius (3/4)*param.loop_radius 3*(3/4)*param.loop_radius ];
+param.Resolution = 3e-3;
+
+%%% Other parameters
+param.i_fov = [param.N param.N param.slices];                                % Vector with fov, [x y z]
+param.voxel_size = param.p_s(1)*param.p_s(2)*param.p_s(3);          % voxel size m3
+param.x_points = (param.i_fov(1)*param.ov)-1;                                     
+param.k_fov = 1./param.p_s;                                                              % K-space FOV
+param.gamma = 42.58e6;                                                                 % Gyromagnetic ratio
 
 %% Calculating parameters for Gradients
-[x,y,z,x_calc,y_calc,z_calc,del_ky,del_kz,t,t_prime]=grad_param(gy,gz,sinsy,sinsz,p_bw,p_s,k_fov,i_fov,Ry,Rz,x_points,gamma);
+[x,y,z,x_calc,y_calc,z_calc,del_ky,del_kz,t,t_prime]=grad_param(param);
+
+%% Cropping image and CoilSens, if z ~= x,y
+if exist('info') ~= 1
+    i_t = i_t(:,:,((param.N-param.slices)/2)+1:((param.N-param.slices)/2)+param.slices);
+end
 
 %% Generate coil sensitivity
-CoilSensitivity = coil_sens(z_offset,coil_radius,loop_radius,Resolution,i_t,nCh,plt);
+CoilSensitivity = coil_sens(i_t,param);
 
-%% Noise decorrelation
-% SNR = 25;
-% %add noise to data
-% addpath('D:\MATLAB\External Functions\addGaussianNoise')
-% %prewithen rawdata
-% rawData_withNoise_Undersampled= reshape(kspace_nufft,[],nCh);
-% % rawData_withNoise_Fullysampled= complex(zeros(size(kspace_nufft_fully_sampled)));
-% noise_level = 0.00125* ((-6.7390) + (1i*3.1531));
-% % noise_level = 0.00125*max(kspace_nufft(:));
-% noise = noise_level*complex(randn(size(rawData_withNoise_Undersampled)),randn(size(rawData_withNoise_Undersampled)));
-% noiseCovariance_Undersampled = noise_covariance_mtx(noise);
-% rawData_withNoise_Undersampled = rawData_withNoise_Undersampled + noise;
-% dmtx_Undersampled = noise_decorrelation_mtx(noiseCovariance_Undersampled);
-% rawData_withNoise_Undersampled = apply_noise_decorrelation_mtx(rawData_withNoise_Undersampled,dmtx_Undersampled);
-% % smaps_prew = apply_noise_decorrelation_mtx(rawData_withNoise_Undersampled,dmtx_Undersampled); 
-% DECorrelatedSensitivity_Undersampled  = apply_noise_decorrelation_mtx(CoilSensitivity,dmtx_Undersampled);
-% CoilSensitivity=DECorrelatedSensitivity_Undersampled;
+%% Cropping image and CoilSens, if z ~= x,y
+% if exist('info') ~= 1 && param.nufft
+%     CoilSensitivity = CoilSensitivity(:,:,((param.N-param.slices)/2)+1:((param.N-param.slices)/2)+param.slices,:);
+% end
 
-%% Cropping image and CoilSens, if z <> x,y
-i_t = i_t(:,:,((N-slices)/2)+1:((N-slices)/2)+slices);
-CoilSensitivity = CoilSensitivity(:,:,((N-slices)/2)+1:((N-slices)/2)+slices,:);
-CoilSensitivity = padarray(CoilSensitivity,(N*(ov-1))/2,'both');
+%% Generate image w/coil sensitivity for 32 channels
+i_t = repmat(i_t,1,1,1,32);
+i_t = i_t.*CoilSensitivity;
+
+%%  Generating K-space Corkscrew trajectories
+[kx,ky,kz,r_ps]=cork_traj(x,y,z,del_ky,del_kz,param);
+clear x y z del_ky del_kz
 
 %% Creating PSFs
-[psf_y,psf_z,psf_yz]=psf(N,slices,i_fov,k_fov,ov,p_s,x_points,i_t,t,t_prime,x_calc,y_calc,z_calc,plt);
+[~,~,psf_yz]=psf(i_t,t,t_prime,x_calc,y_calc,z_calc,param);
+%clear x_points t t_prime x_calc y_calc z_calc
+
+%% Wave_caipi image
+%with NUFFT
+if param.nufft
+    % Generating NUFFT
+    kspace_nufft = wc_nufft(i_t,kx,ky,kz,param);
+    clear kx ky kz
+    % Adding zeros to skipping positions due to 2D CAIPI and generate WAVE-CAIPI image
+    i_wc = imag_wc(kspace_nufft,param);
+else
+    %with PSF
+    i_wc = imag_wc_psf(CoilSensitivity,psf_yz,i_t,param);
+end
 
 %% Calculating G-Factor
-if gf == 1 || gf==3
-    [g_img_t,g_av_t,g_max_t]=gfact_teo(N,slices,Ry,Rz,nCh,i_t,psf_yz,CoilSensitivity,ov,caipi);
+% Theoretical
+if gf == 1 || gf==5
+    [g_img_t,g_av_t,g_max_t]=gfact_teo1(i_t,psf_yz,CoilSensitivity,param);
 end
-if gf == 2 || gf==3
-    [g_img_i,g_av_i,g_max_i]=gfact_iter(N,slices,Ry,Rz,nCh,i_t,psf_yz,CoilSensitivity,ov);
-end
-as(g_img_t)
+% Fast
+% if gf == 3 || gf==5
+%     g_mean = gfact_iter1(psf_yz,CoilSensitivity,param);
+% end
 
-%% Call next function
-% Undersampling_kspace
+%% SENSE Reconstruction
+[i_wc_recon,rmse] = wc_sense_recon(i_wc,CoilSensitivity,psf_yz,param);
+as(i_wc_recon)
