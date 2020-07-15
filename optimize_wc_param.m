@@ -1,5 +1,5 @@
 %% Add paths
-clear all; %clc
+%clear all; %clc
 addpath(genpath('/home/amonreal/gpuNUFFT-master/gpuNUFFT'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/'))
 addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/shepp_logan3d'))
@@ -14,33 +14,31 @@ gf =  5;                                                                % G-Fact
 
 %% For Phantom                   
 param = [];
-param.N = 80;                                                    % In plane resolution
-param.slices = 80;                                               % number of slices
+param.N = 224;                                                    % In plane resolutio
+param.slices = 120;                                               % number of slices
 param.gy = (6e-3);                                              % Max amplitude of sin Y gradient
-param.gz = (6e-3);                                              % Max amplitude of sin Z gradient
-param.sinsy = 6;                                                 % # of sins per readout line   
-param.sinsz = 6;                                                % # of sins per readout line 
-param.p_bw = 100;                                             % pixel BW
-param.Ry = 4;                                                     % Undersampling factor in Y 
-param.Rz = 4;                                                      % Undersampling factor in Z
-param.caipi_del=2;                                             % 2D-CAIPI delta
-param.caipi = 1;                                                 % 1 to for 2D-CAIPI sampling
-param.p_s = [1e-3 1e-3 1e-3];                            % Vector with pixel size [x y z]
+param.gz =(6e-3);                                              % Max amplitude of sin Z gradient
+param.sinsy = 7;                                                 % # of sins per readout line   
+param.sinsz = 7;                                                % # of sins per readout line 
+param.p_bw = 70;                                             % pixel BW
+param.Ry = 2;                                                     % Undersampling factor in Y 
+param.Rz = 2;                                                      % Undersampling factor in Z
+param.caipi_del=1;                                             % 2D-CAIPI delta
+param.caipi = 0;                                                 % 1 to for 2D-CAIPI sampling
+param.p_s = [1e-3 1e-3 2e-3];                            % Vector with pixel size [x y z]
 param.plt = 0;                                                    % 1 to plot all trajectories
-param.ov = ov(param);
+[param.ov,rg,param.if_max] = ov(param);
 param.gpu = true;
 param.cs = 1;                                                     % CoilSensitivity, 1=from file, 0=simulated
 param.nufft = false;                                            % Use NUFFT to create Wave image, false = use psf only
 i_t = phantom3d(param.N); 
+param.gz_sr = 5200;                                                      % Z Gradient slew rate
+param.gy_sr = 200;                                                        % Y Gradient slew rate
+% Testing... REMOVEE....
+param.ov = 6;
 
 %% Calculating max sines
-gz_sr = 1300;                                                      % Z Gradient slew rate
-gy_sr = 200;                                                        % Y Gradient slew rate
-t_r = 1./param.p_bw;
-gz_rt = 1/(gz_sr/param.gz);           % Z Gradient raise time
-gy_rt = 1/(gy_sr/param.gy);          % Y Gradient raise time
-max_sinsy = floor(t_r./(4*gy_rt));
-max_sinsz = floor(t_r./(4*gz_rt));
+param = max_sines(param);
 
 %% Other paramets
 %%% Receiver coil parameters
@@ -83,7 +81,7 @@ clear x y z del_ky del_kz
 
 %% Creating PSFs
 [~,~,psf_yz]=psf(i_t,t,t_prime,x_calc,y_calc,z_calc,param);
-%clear x_points t t_prime x_calc y_calc z_calc
+% clear x_points t t_prime x_calc y_calc z_calc
 
 %% Wave_caipi image
 %with NUFFT
@@ -99,14 +97,14 @@ else
 end
 
 %% Calculating G-Factor
-% Theoretical
-if gf == 1 || gf==5
-    [g_img_t,g_av_t,g_max_t]=gfact_teo1(i_t,psf_yz,CoilSensitivity,param);
-end
-% Fast
-% if gf == 3 || gf==5
-%     g_mean = gfact_iter1(psf_yz,CoilSensitivity,param);
+% % Theoretical
+% if gf == 1 || gf==5
+%     [g_img_t,g_av_t,g_max_t]=gfact_teo1(i_t,psf_yz,CoilSensitivity,param);
 % end
+% % Fast
+% % if gf == 3 || gf==5
+% %     g_mean = gfact_iter1(psf_yz,CoilSensitivity,param);
+% % end
 
 %% SENSE Reconstruction
 [i_wc_recon,rmse] = wc_sense_recon(i_wc,CoilSensitivity,psf_yz,param);
