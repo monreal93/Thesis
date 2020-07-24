@@ -14,9 +14,10 @@ param.sinsz = 7;
 param.nCh = 32;
 param.p_bw = 70;
 param.p_s = [1 1 2]*0.001;
+% param.p_s = [0.00100000600000000,0.000864278695643436,0.00154012958999703];
 param.i_fov = [param.N param.N param.slices].*param.p_s;        % [readout phase slice]
-param.Ry = 1;                                                     % Undersampling factor in Y 
-param.Rz = 1;                                                      % Undersampling factor in Z
+param.Ry = 2;                                                     % Undersampling factor in Y 
+param.Rz = 2;                                                      % Undersampling factor in Z
 param.caipi_del=1;                                             % 2D-CAIPI delta
 param.caipi = 1;                                                 % 1 to for 2D-CAIPI sampling
 param.x_points = (param.i_fov(1)*param.ov)-1;
@@ -24,11 +25,13 @@ param.k_fov = 1./param.p_s;
 psf_source = 1;                                                 % Psf source, 1 from single projection scan (to be fitted) , 0 from field camera (loaded from file)
 
 %% Load data
-% load('./Data/wc_scan_150720/CoilSensitivitySpherePhantomNoSliceOversampling_new2mm_withMask.mat')
-% load('./Data/wc_scan_150720/RawDataSphere_noSliceOversampling.mat')
+% To use brain data: replace SpherePhantom with Brain
+% load('./Data/wc_scan_150720/CoilSensitivityBrainNoSliceOversampling_new2mm_withMask.mat')
+% To use brain data: replace Sphere with Brain
+% load('./Data/wc_scan_150720/RawDataBrain_noSliceOversampling.mat')
 % CoilSensitivity = smaps((448-224)/2:((448-224)/2)+223,:,:,:);
-% CoilSensitivity = smaps;
-% i_wc = kspace;
+CoilSensitivity = smaps;
+i_wc = kspace;
 
 %% PSF
 if psf_source == 0
@@ -44,8 +47,8 @@ elseif psf_source == 1
     psf_y = mean(psf_y,4);
     psf_z = mean(psf_z,4);
     
-%     psf_z = conj(psf_z);
-%     psf_y = conj(psf_y);
+    psf_z = conj(psf_z);
+    psf_y = conj(psf_y);
     
     % Masking psfs ..
     msk_y = rssq(PSFData.PSF_z_ref,4);
@@ -56,92 +59,25 @@ elseif psf_source == 1
     psf_z = msk_z.*psf_z;
 end
     
-    % cropping psfs
-    if psf_source == 1
-        nz_y = find(psf_y(1,:));
-        nz_z = find(psf_z(1,:));
-    else 
-        nz_y = find(psf_y(1,:));
-        nz_z = 112-60:112+59;
-    end
-    
     % Creating cartesian coordinates
     yc = param.i_fov(2)/2*-1:param.p_s(2):(param.i_fov(2)/2)-param.p_s(2);
     yc = yc - mean(yc);
     zc_2mm = param.i_fov(3)/2*-1:param.p_s(3):(param.i_fov(3)/2)-param.p_s(3);
     zc_2mm = zc_2mm - mean(zc_2mm);
-    zc_1mm = yc;
-    xc = param.i_fov(1)*param.ov/2*-1:param.p_s(1):(param.i_fov(1)*param.ov/2)-0.001;
-    xc = xc - mean(xc);
-    
-   %shifting --> AQ
-    dt = 9.300000034272795e-06;
-    ds_w = 13.017600059509277e-3;
-    fq = 1/(ds_w/7);
-    K_ramp = 42.577e6*0.5*0.006*(0.006/200)*2*pi;
-    I = round(((ds_w/7)/2)/dt);
-    I = I/2;
-    rmp = zc_1mm.*K_ramp;
-    t_acq = 0:dt:dt*(1344-1);
-    psf_z_fit = zeros(size(psf_z,1),size(psf_z,2));
-    delta_t = 1e-7;
-    
-    psf_z_ang = angle(psf_z);
-    for idx=1:size(psf_z,2)
-        psf_z_tmp = psf_z_ang(:,idx);
-        psf_z_tmp = unwrap(psf_z_tmp,[],1);
-        
-        % approach 1
-%         psf_z_tmp = psf_z_tmp - mean(psf_z_tmp);
-        
-%         % approach 2
-%         psf_z_tmp = diff(psf_z_tmp)./delta_t;
-%         psf_z_tmp = circshift(psf_z_tmp,-48);
-%         psf_z_tmp = cumsum(psf_z_tmp*delta_t);
-%         psf_z_tmp =  interp1(psf_z_tmp,1:1344,'linear','extrap');
-%         psf_z_tmp = psf_z_tmp - mean(psf_z_tmp);
-% %         psf_z_tmp = psf_z_tmp.*zc_1mm(idx);               
-% %         psf_z_tmp = padarray(psf_z_tmp,[1 0],'pre');
-
-        
-%         psf_z_tmp = psf_z_tmp*1.2;  %% TEstiiingggnngngn
-%         psf_z_tmp = psf_z_tmp - mean(psf_z_tmp);% + min(psf_z_tmp);
-%         psf_z_tmp = psf_z_tmp + 0.1763;  % TEstinggg...
-        
-%         psf_z_tmp = circshift(psf_z_tmp,I,1);
-        
-%                 % Testing...
-%         amp = max(psf_y_tmp(:));
-%         psf_y_sample = 42.58e6*cumsum(amp*sin(2*pi*fq*t_acq)*1e-7);
-%         psf_y_sample_fit(:,idx) = exp(-1i*psf_y_sample);
-        
-        %    psf_y_tmp = wrapToPi(psf_y_tmp);
-        %    psf_y_tmp =  exp(-1i*psf_y_tmp);
-        
-        if idx==75
-            1;
-        end
-        
-        psf_z_fit(:,idx) = psf_z_tmp;
-    end
-%     psf_z_fit = psf_z_fit - (mean(psf_z_fit)*1.2);
-    
-    psf_z = psf_z_fit;
-    clear psf_z_fit;
-    
-    % Fitting psf Y and Z
-    % psf_y_ang = angle(psf_y(:,nz_y));
-    psf_y_ang = angle(psf_y(:,nz_y));
-    % psf_z_ang = (psf_z(:,nz_z));
     
     for idx = 1:size(psf_y,1)
+        % Finding indices of non-zero elements
+        nz_y = find(msk_y(idx,:));
+        nz_z = find(msk_z(idx,:));
+        
+        % Getting spatial coordinates of non-zero elements
         yc_nz = yc(1,nz_y);
         zc_nz = zc_2mm(1,nz_z);
-        
+       
         % Unwrap
-        psf_y_tmp = psf_y_ang(idx,:);
+        psf_y_tmp = angle(psf_y(idx,nz_y));
         psf_y_tmp = unwrap(psf_y_tmp,[],2);
-        psf_z_tmp = psf_z(idx,:);
+        psf_z_tmp = angle(psf_z(idx,nz_z));
         psf_z_tmp = nonzeros(psf_z_tmp)';
         psf_z_tmp = unwrap(psf_z_tmp,[],2);
         
@@ -151,45 +87,27 @@ end
         p = polyfit(zc_nz,psf_z_tmp,1);
         psf_z_tmp = polyval(p,zc_2mm);
         
-        
-        %     % Wrap back
+        % Wrap back
         psf_y_tmp = wrapToPi(psf_y_tmp);
         psf_z_tmp = wrapToPi(psf_z_tmp);
         
-        % Complex exponential
+        % Saving angles of psf
         psf_y_angl(idx,:) = psf_y_tmp;
         psf_z_angl(idx,:) = psf_z_tmp;
         
+        % Complex exponential
         psf_y_tmp =  exp(-1i*psf_y_tmp);
         psf_z_tmp =  exp(-1i*psf_z_tmp);
         
         psf_y_fit(idx,:) = psf_y_tmp;
         psf_z_fit(idx,:) = psf_z_tmp;
-        
     end
-    
-    
+
     psf_y = psf_y_fit;
     psf_z = psf_z_fit;
-    
-    if psf_source == 1
-        I = 50;  % for single projection scan
-        I = 42+6;
-%         I = 0;
-    elseif psf_source == 0
-        I = 60;  % for field camera data..
-        I = 50;
-    end
-%     psf_z = circshift(psf_z,I,1);
-    
-%     psf_y = circshift(psf_y,10,1);
-%[psf_y,psf_z] = deal(psf_z,psf_y);
-psf_yz = repmat(psf_y,[1,1,size(psf_z,2)]) .* repmat(permute(psf_z, [1,3,2]), [1,size(psf_y,2),1]);
 
-psf_z_unw = unwrap(angle(psf_z),[],2);
-psf_y_unw = unwrap(angle(psf_y),[],2);
-
- %clear psf_y psf_z
+    psf_yz = repmat(psf_y,[1,1,size(psf_z,2)]) .* repmat(permute(psf_z, [1,3,2]), [1,size(psf_y,2),1]);
+    clear psf_y psf_z
  
 %% Retrospectively undersampling
 % Creating mask for CAIPI undersampling
@@ -240,7 +158,6 @@ for iter_wc = 1:last_iter_wc
     %tic
     sl_wc = iter_wc;
     i_wc_sl = i_wc(:,:,sl_wc,:); 
-%     cs = zeros(size(i_wc_sl,1)/param.ov-1,size(i_wc_sl,2)*param.Ry-1,param.Rz,param.nCh);
     cs = zeros(size(CoilSensitivity,1),size(CoilSensitivity,2),param.Rz,param.nCh);
     slice_ind = zeros(1,param.Rz);
     sl_i_t = sl_wc;
@@ -315,48 +232,3 @@ wc_rev = FFT_1D_Edwin(wc_rev,'image',1);
 wc_rev = wc_rev((param.ov*param.N/2)-param.N/2:(param.ov*param.N/2)+param.N/2-1,:,:,:);
 wc_rev = rssq(wc_rev,4);
 as(wc_rev)
-
-% % power spectrum of reconstructed image
-% n = param.ov*param.N;
-% pw_complete = FFT_1D_Edwin(i_wc_complete,'kspace',1);
-% pw_complete = mean(pw_complete,4);
-% pw_sample_complete = pw_complete(:,112,30);
-% pw_sample_complete = abs(pw_sample_complete).^2/n;
-% f = (-n/2:n/2-1)*(fq/n);
-% % figure; plot(f,pw_sample_complete)
-% 
-% % power spectrum of reconstructed image
-% n = param.ov*param.N;
-% pw_complete = FFT_1D_Edwin(phn_wc,'kspace',1);
-% pw_complete = mean(pw_complete,4);
-% pw_sample_complete = pw_complete(:,112,30);
-% pw_sample_complete = abs(pw_sample_complete).^2/n;
-% f = (-n/2:n/2-1)*(fq/n);
-% % figure; plot(f,pw_sample_complete)
-
-% Making template of phn_wc and i_wc_complete to compare
-phn_template = phn_wc;
-phn_template(abs(phn_template)>0.1) = 1;
-phn_template(abs(phn_template)<0.1) = 0;
-i_wc_template = i_wc_complete;
-i_wc_template(abs(i_wc_template)>3) = 5;
-i_wc_template(abs(i_wc_template)<3) = 0;
-
-% as(phn_template)
-% as(i_wc_template)
-as(phn_template+i_wc_template)
-
-
-% psf_yz_fieldcamera = psf_yz;
-% psf_yz_fieldcamera_msk = abs(FFT_1D_Edwin(psf_yz_fieldcamera,'kspace',1));
-% psf_yz_fieldcamera_msk(psf_yz_fieldcamera_msk>0.1) = 1;
-% psf_yz_fieldcamera_msk(psf_yz_fieldcamera_msk<0.1) = 0;
-% 
-% psf_yz_singleslice = psf_yz;
-% psf_yz_singleslice_msk = abs(FFT_1D_Edwin(psf_yz_singleslice,'kspace',1));
-% psf_yz_singleslice_msk(psf_yz_singleslice_msk>0.2) = 10;
-% psf_yz_singleslice_msk(psf_yz_singleslice_msk<0.2) = 0;
-% 
-% as(psf_yz_fieldcamera_msk+psf_yz_singleslice_msk)
-
-
