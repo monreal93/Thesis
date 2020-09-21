@@ -1,6 +1,11 @@
+% This script calculates the corckscrew, saves the
+% points in the space (taking into account the oversampling factor)
+% and defines the disance between each corckscrew, 
+
 function [x,y,z,x_calc,y_calc,z_calc,del_ky,del_kz,t,t_prime] = grad_param(param)
     
-t_r = 1/param.p_bw;
+% t_r = 1/param.p_bw;
+t_r = param.t_r;
 delta_t = 1e-7;
 t_prime = 0:delta_t:t_r;
 t = 0:t_r/param.x_points:t_r;

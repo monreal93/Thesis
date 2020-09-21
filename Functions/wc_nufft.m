@@ -1,3 +1,5 @@
+% Script to generate the Wave-CAIPI image using the NUFFT function
+
 function kspace_nufft = wc_nufft(i_t,kx,ky,kz,param)
 
 % Normalize trajectories
@@ -8,12 +10,12 @@ tr(3,:) = kz(:)./param.k_fov(3);
 
 if param.gpu
     osf = 2; wg = 3; sw = 8;
-    FT = gpuNUFFT(tr,col(ones(size(kx(:)))),osf,wg,sw,[param.N,param.N,param.slices],[],true);
+    FT = gpuNUFFT(tr,col(ones(size(kx(:)))),osf,wg,sw,[param.Nx,param.Ny,param.slices],[],true);
     kspace_nufft1=FT*i_t;
 else
     w=1;
-    FT = NUFFT3D(tr', col(sqrt(w)), 1, 0, [param.N,param.N,param.slices], 2);
-    kspace_nufft1 = zeros(param.N*param.N*param.slices*param.ov/(param.Ry*param.Rz),param.nCh);
+    FT = NUFFT3D(tr', col(sqrt(w)), 1, 0, [param.Nx,param.Ny,param.slices], 2);
+    kspace_nufft1 = zeros(param.Nx*param.Ny*param.slices*param.ov/(param.Ry*param.Rz),param.nCh);
     for ii=1:param.nCh
         kspace_nufft1(:,ii) = FT*i_t(:,:,:,ii);
     end
@@ -26,7 +28,7 @@ if param.plt == 1
 end
 clear ky kz
 
-kspace_nufft = reshape(kspace_nufft1,param.N*param.ov,param.N/param.Ry,param.slices/param.Rz,param.nCh);
+kspace_nufft = reshape(kspace_nufft1,param.Nx*param.ov,param.Ny/param.Ry,param.slices/param.Rz,param.nCh);
 kspace_nufft = flip(kspace_nufft,2);
 kspace_nufft = flip(kspace_nufft,3);
 

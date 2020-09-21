@@ -1,3 +1,7 @@
+% Generate the Wave-CAIPI image using a NUFFT algorithm
+% it also supports gpu option
+% Note: it can be memory consuming depending on the matrix size
+
 function i_wc = imag_wc(kspace_nufft,param)
 
 if param.caipi && param.Ry ~= 1 || param.Rz ~= 1    
@@ -20,7 +24,7 @@ ky_i=1;
         end
 
     % Cropping from start
-    lwy = 1; upy=param.N/param.Ry;
+    lwy = 1; upy=param.Ny/param.Ry;
     lwz = 1; upz=param.slices/param.Rz;
 
     test_img = FFT_3D_Edwin(kspace_new,'image' );

@@ -1,3 +1,5 @@
+% This script simulates the corkscrew trajectory
+
 function [kx,ky,kz,r_ps]=cork_traj(x,y,z,del_ky,del_kz,param)
 
 %% Moving in y direction first and then z...
@@ -62,23 +64,26 @@ end
 ky=ky-mean(ky(:));
 kz=kz-mean(kz(:));
 
+% Plot trajectories
 % figure;scatter(kz(:),ky(:),'.');title('k-space trajectory');xlabel('Kz');ylabel('Ky');axis image
-figure;scatter3(kx(:),ky(:),kz(:),'.');title('k-space trajectory');xlabel('Kx');ylabel('Ky');zlabel('kz');axis image; view([0 90 0]);
+% figure;scatter3(kx(:),ky(:),kz(:),'.');title('k-space trajectory');xlabel('Kx');ylabel('Ky');zlabel('kz');axis image; view([0 90 0]);
 
 % Calculating real pixel size
 r_ps = [1./(max(kx(:))-min(kx(:))) 1./(max(ky(:))-min(ky(:))) 1./(max(kz(:))-min(kz(:)))];
 
 %  Ploting all the trajerctories
 if param.plt == 1
- figure;
+ figure('Position', [10 10 700 600]); title('K-space trajectory')
     for j = 1:param.i_fov(3)/param.Rz   
         xx = squeeze(kx(:,:,j));
         yy = squeeze(ky(:,:,j));
         zz = squeeze(kz(:,:,j));
         for l=1:param.i_fov(2)/param.Ry
-            plot3(xx(:,l),yy(:,l),zz(:,l));
+            plot3(xx(:,l),yy(:,l),zz(:,l),'b'); 
+            xlim([-200 200]); ylim([-200 200]); zlim([-200 200]);
             hold on
         end
     end
-    xlabel('Kx');ylabel('Ky');zlabel('Kz');view([90 0 0])
+    xlabel('Kx');ylabel('Ky');zlabel('Kz'); view([86 -4.5]);
+    xticks([]); yticks([]); zticks([]);
 end

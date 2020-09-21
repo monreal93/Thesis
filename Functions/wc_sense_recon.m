@@ -1,4 +1,10 @@
-function [i_wc_recon,rmse] = wc_sense_recon(i_wc,CoilSensitivity,psf_yz,param)
+% Sense reconstruction for the Wave-CAIPI
+% In section User input, you can select if reconstruct all the slices or
+% only one slice (the index is for the Wave-CAIPI image, so undersampling
+% has to be taken into account)
+% Note: Not sure if works properly for different Delta CAIPI
+
+function [i_wc_recon] = wc_sense_recon(i_wc,CoilSensitivity,psf_yz,param)
 %% User input
 recon_all_sl = true;
 % sl_wc = 10;                                % Slice from the undersampled WAVE caipi image, < size of undersampled img.
@@ -17,6 +23,19 @@ else
     last_iter_wc = 1; 
 end
 
+% Getting shift amount
+shift_amount = zeros(1,param.Rz);
+for ii=1:param.Rz-1
+    shift_amount(ii+1) = ii;
+end
+
+if param.Nx == param.slices
+    shift_amount = shift_amount .* (size(i_wc,2)/(param.Ry/param.caipi_del));
+else
+    shift_amount = shift_amount .* (size(i_wc,2)/param.Rz);
+    shift_amount = floor(shift_amount);
+end
+        
 for iter_wc = 1:last_iter_wc
     %tic
     if recon_all_sl
@@ -49,18 +68,6 @@ for iter_wc = 1:last_iter_wc
         Img_WAVE = zeros(size(i_wc_sl,1)/(param.ov),size(i_wc_sl,2)*(param.Ry),size(i_wc_sl,3)*(param.Rz));
         lsqr_iter = 200;
         lsqr_tol = 1e-5; 
-
-        shift_amount = zeros(1,param.Rz);
-        for ii=1:param.Rz-1
-            shift_amount(ii+1) = ii;
-        end
-        
-        if param.N == param.slices
-            shift_amount = shift_amount .* (size(i_wc_sl,2)/(param.Ry/param.caipi_del));
-        else
-            shift_amount = shift_amount .* (size(i_wc_sl,2)/param.Rz);
-            shift_amount = floor(shift_amount);
-        end
         
         psf_use = repmat(psf_yz(:,:,slice_ind), [1,1,1,param.nCh]);   
         receive_use = zeros(size(cs));
@@ -93,19 +100,5 @@ for iter_wc = 1:last_iter_wc
         
         %toc
 end
-
-%% Calculatin RMSE
-i_t=phantom3d(param.N);
-msk = CoilSensitivity(:,:,:,1);
-msk(msk~=0) = 1;
-i_t = double(i_t.*msk);
-
-if param.N ~= param.slices 
-    i_t = i_t(:,:,((param.N-param.slices)/2)+1:((param.N-param.slices)/2)+param.slices);
-end
-i_wc_recon_abs = abs(i_wc_recon);
-i_wc_recon_abs = (i_wc_recon_abs-min(i_wc_recon_abs(i_wc_recon_abs~=0)))/(max(i_wc_recon_abs(i_wc_recon_abs~=0))-min(i_wc_recon_abs(i_wc_recon_abs~=0)));
-
-rmse = sqrt(immse(i_wc_recon_abs,i_t)./abs(mean(i_t(:)~=0)));
 
 end
