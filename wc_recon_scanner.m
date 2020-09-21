@@ -1,39 +1,51 @@
-%clear all; clc
-clearvars -except PSFData smaps kspace phn i_wc_complete
-addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/PhilipsDataReaders/'))
-addpath(genpath('/home/amonreal/Documents/Thesis/Matlab_scripts/Code4Alejandro/'))
-addpath(genpath('/home/jeroen/matlab/ArrShow'))
-addpath(genpath('/home/jeroen/FRIDGE_jeroen/HIGHGRID/AlejandroData/Optimize_wc_4RIBSserver/functions'))
+% This script reconstruct data from the scanner, it retrospectively
+% under-samples the data:
+% 1)    select parameters used for the image acquisition, important parameters
+%       are (Ry,Rz,caipi,caipi_del) and psf_source (to check where the psf is
+%       coming from)
+% 2)    Load data... some lines are commented, so only run that section one
+%       (it takes some time to load)
+% 3)    Loads and masks PSF, if psf_source == 0 (from field camera) change
+%       change the location of this data
+% 4)    Pads zeros, to change size of image, so recon algorithm works.. 
+% 
 
-%% Parameters
-param.N = 224;
+%% Add paths 
+clear all; clc
+clearvars -except PSFData smaps kspace phn i_wc_complete
+addpath(genpath('./Functions/Code4Alejandro/'))
+
+%% 1) Parameters
+param.Nx = 224;
+param.Ny = 224;
 param.slices = 60;
 param.ov = 6;
+param.gy = 6e-3;
+param.gz = 6e-3;
 param.sinsy = 7;
 param.sinsz = 7;
 param.nCh = 32;
 param.p_bw = 70;
 param.p_s = [1 1 2]*0.001;
-% param.p_s = [0.00100000600000000,0.000864278695643436,0.00154012958999703];
-param.i_fov = [param.N param.N param.slices].*param.p_s;        % [readout phase slice]
-param.Ry = 2;                                                     % Undersampling factor in Y 
-param.Rz = 2;                                                      % Undersampling factor in Z
+param.i_fov = [param.Nx param.Ny param.slices].*param.p_s;        % [readout phase slice]
+param.Ry = 1;                                                     % Undersampling factor in Y 
+param.Rz = 1;                                                      % Undersampling factor in Z
 param.caipi_del=1;                                             % 2D-CAIPI delta
-param.caipi = 1;                                                 % 1 to for 2D-CAIPI sampling
+param.caipi = 0;                                                 % 1 to for 2D-CAIPI sampling
 param.x_points = (param.i_fov(1)*param.ov)-1;
 param.k_fov = 1./param.p_s;
 psf_source = 1;                                                 % Psf source, 1 from single projection scan (to be fitted) , 0 from field camera (loaded from file)
+ref_img = '/home/jeroen/FRIDGE_jeroen/HIGHGRID/AlejandroData/Data/wc_scan_150720/recon/brain_fully.mat';
 
-%% Load data
+%% 2) Load data
 % To use brain data: replace SpherePhantom with Brain
 % load('./Data/wc_scan_150720/CoilSensitivityBrainNoSliceOversampling_new2mm_withMask.mat')
 % To use brain data: replace Sphere with Brain
 % load('./Data/wc_scan_150720/RawDataBrain_noSliceOversampling.mat')
-% CoilSensitivity = smaps((448-224)/2:((448-224)/2)+223,:,:,:);
 CoilSensitivity = smaps;
 i_wc = kspace;
 
-%% PSF
+%% 3) Loading and masking PSF
 if psf_source == 0
     % Load field camera psf, obtained from example file...
     load('Data/psf_y.mat')
@@ -58,7 +70,21 @@ elseif psf_source == 1
     psf_y = msk_y.*psf_y;
     psf_z = msk_z.*psf_z;
 end
+
+%% 4) Resizing CoilSens and psf for underampling
+    if param.Ry == 3
+        % Padding cero to make it 240x240x60 in y direction, only or R 3x3
+        CoilSensitivity = padarray(CoilSensitivity,[0 8 0 0], 'both');
+%         i_wc = padarray(i_wc,[0 8 0 0], 'both');
+        psf_y = padarray(psf_y,[0 8 0 0],'both');
+        
+    elseif param.Ry == 4
+        % Padding cero to make it 224x224x64 in y direction, only or R 4x4
+        CoilSensitivity = padarray(CoilSensitivity,[0 0 2 0], 'both');
+        psf_z = padarray(psf_z,[0 0 2 0],'both');
+    end
     
+%% 5) Interpolating PSF
     % Creating cartesian coordinates
     yc = param.i_fov(2)/2*-1:param.p_s(2):(param.i_fov(2)/2)-param.p_s(2);
     yc = yc - mean(yc);
@@ -107,9 +133,22 @@ end
     psf_z = psf_z_fit;
 
     psf_yz = repmat(psf_y,[1,1,size(psf_z,2)]) .* repmat(permute(psf_z, [1,3,2]), [1,size(psf_y,2),1]);
-    clear psf_y psf_z
- 
-%% Retrospectively undersampling
+%     clear psf_y psf_z
+   
+%% 6) Retrospectively undersampling
+% Resizing wave-caipi image for underampling
+    if param.Ry == 3
+        % Padding cero to make it 240x240x60 in y direction, only or R 3x3
+        i_wc = FFT_3D_Edwin(i_wc,'image');
+        i_wc = padarray(i_wc,[0 8 0 0], 'both');
+        i_wc = FFT_3D_Edwin(i_wc,'kspace');
+    elseif param.Ry == 4
+        % Padding cero to make it 224x224x64 in y direction, only or R 4x4
+        i_wc = FFT_3D_Edwin(i_wc,'image');
+        i_wc = padarray(i_wc,[0 0 2 0], 'both');
+        i_wc = FFT_3D_Edwin(i_wc,'kspace');
+    end
+
 % Creating mask for CAIPI undersampling
 msk = zeros(size(i_wc));
 kz_i=1;
@@ -127,11 +166,11 @@ i_wc = i_wc.*msk;
 i_wc = FFT_3D_Edwin(i_wc,'image');
 
 % Cropping from start
-lwy = 1; upy=ceil(param.N/param.Ry);
-lwz = 1; upz=ceil(param.slices/param.Rz);
+lwy = 1; upy=floor(param.Ny/param.Ry);
+lwz = 1; upz=floor(param.slices/param.Rz);
 i_wc = i_wc(:,lwy:upy,lwz:upz,:);
 
-%% SENSE recon for Wave-CAIPI
+%% 7) SENSE recon for Wave-CAIPI
 y_skip = size(i_wc, 2);
 i_wc_recon = complex(zeros(size(CoilSensitivity(:,:,:,1))));
 param.psf_len = size(i_wc, 1);
@@ -147,11 +186,11 @@ for ii=1:param.Rz-1
     shift_amount(ii+1) = ii;
 end
 
-if param.N == param.slices
+if param.Nx == param.slices
     shift_amount = shift_amount .* (size(i_wc,2)/(param.Ry/param.caipi_del));
 else
     shift_amount = shift_amount .* (size(i_wc,2)/param.Rz);
-    shift_amount = floor(shift_amount);
+    shift_amount = ceil(shift_amount);
 end
         
 for iter_wc = 1:last_iter_wc
@@ -216,19 +255,23 @@ for iter_wc = 1:last_iter_wc
         %toc
 end
 
-%% Trying different things
-i_wc_complete = FFT_3D_Edwin(kspace,'image');
-phn = i_wc_recon;
-phn(phn~=0) = 1;
-phn = padarray(phn,(1344-224)/2,'both');
-phn = FFT_1D_Edwin(phn,'kspace',1);
-phn_wc = psf_yz.*phn;
-phn_wc = FFT_1D_Edwin(phn_wc,'image',1);
+%% 8) Calculating G-Factor
+% Theoretical
+[g_img_t,g_av_t,g_max_t]=gfact_teo1(psf_yz,CoilSensitivity,param);
 
-% trying to reverse the wc image using the psf
-wc_rev = FFT_1D_Edwin(i_wc_complete,'kspace',1);
-wc_rev = wc_rev./psf_yz;
-wc_rev = FFT_1D_Edwin(wc_rev,'image',1);
-wc_rev = wc_rev((param.ov*param.N/2)-param.N/2:(param.ov*param.N/2)+param.N/2-1,:,:,:);
-wc_rev = rssq(wc_rev,4);
-as(wc_rev)
+%% 9) RMSE
+rmse = norm_mse(ref_img,i_wc_recon,CoilSensitivity,param);
+
+res = [];
+res.i_wc_recon = i_wc_recon;
+res.gf_map = g_img_t;
+res.param = param;
+res.rmse = rmse;
+res.g_av = g_av_t;
+res.g_max = g_max_t;
+
+%% 10) Save data
+% tit = sprintf('Data/wc_scan_150720/recon/%i_%i_%i_%i_%i_%i_%i_%i_%i.mat',...
+%     param.Ry,param.Rz,param.Nx,param.slices,param.gy.*1000,param.gz*1000,...
+%     param.sinsy,param.sinsz,param.p_bw);
+% save(tit,'res')
